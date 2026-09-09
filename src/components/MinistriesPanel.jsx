@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatCurrency } from '../utils/formatters';
 import { MinisterCouncil } from './MinisterCouncil';
-import { ShieldCheck, Heart, Lightbulb, Landmark, Award, ArrowUpRight, Vault } from 'lucide-react';
+import { ShieldCheck, Heart, Lightbulb, Landmark, Award, ArrowUpRight, Vault, HeartHandshake, Users } from 'lucide-react';
 
 export const MinistriesPanel = ({
   state,
@@ -13,7 +13,7 @@ export const MinistriesPanel = ({
   withdrawSovereignFund,
   numberingSystem
 }) => {
-  const alloc = state.ministryAllocations || { health: 25, rd: 25, infra: 25, security: 25 };
+  const alloc = state.ministryAllocations || { social: 40, health: 20, rd: 15, infra: 15, security: 10 };
 
   const handleSliderChange = (key, value) => {
     setMinistryAllocations({ [key]: parseInt(value, 10) });
@@ -23,11 +23,21 @@ export const MinistriesPanel = ({
 
   return (
     <div className="glass-panel ministries-panel">
-      <h3 className="d-flex align-center gap-2 mb-3">
-        <Landmark className="text-cyan" /> Ministerios & Finanzas Soberanas
-      </h3>
+      <div className="d-flex justify-between align-center flex-wrap gap-2 mb-2">
+        <h3 className="d-flex align-center gap-2 m-0">
+          <Landmark className="text-cyan" /> Ministerios & Finanzas Soberanas
+        </h3>
+        <div className="d-flex align-center gap-2 flex-wrap">
+          <span className="badge text-xs d-flex align-center gap-1" style={{ borderColor: '#ec4899', color: '#ec4899', background: 'rgba(236,72,153,0.1)' }}>
+            <HeartHandshake size={12} /> Paz Social: <strong>{state.socialPeace || 85}%</strong>
+          </span>
+          <span className="badge text-xs d-flex align-center gap-1" style={{ borderColor: (state.unemploymentRate || 14) > 18 ? 'var(--danger)' : 'var(--warning)', color: (state.unemploymentRate || 14) > 18 ? 'var(--danger)' : 'var(--warning)' }}>
+            <Users size={12} /> Paro (EPA): <strong>{(state.unemploymentRate !== undefined ? state.unemploymentRate : 14.0).toFixed(1)}%</strong>
+          </span>
+        </div>
+      </div>
       <p className="text-xs text-muted mb-4">
-        Asigna el enfoque estratégico de tu gobierno para protegerte de crisis y maximizar el rendimiento económico.
+        Asigna el presupuesto entre los 5 sectores clave. La Protección Social (pensiones y prestaciones) absorbe más del 40% del gasto real; recortarla ahorra caja pero desploma la paz social.
       </p>
 
       {/* CONSEJO DE MINISTROS REACTIVO */}
@@ -35,6 +45,24 @@ export const MinistriesPanel = ({
 
       {/* SECTORES MINISTERIALES */}
       <div className="ministries-grid mb-4">
+        <div className="ministry-card glass-panel p-3" style={{ borderColor: 'rgba(236, 72, 153, 0.4)' }}>
+          <div className="d-flex justify-between align-center mb-1">
+            <span className="d-flex align-center gap-1 text-sm font-bold" style={{ color: '#ec4899' }}>
+              <HeartHandshake size={16} /> Bienestar & Pensiones (GF10)
+            </span>
+            <span className="badge text-xs" style={{ borderColor: '#ec4899', color: '#ec4899' }}>{alloc.social || 40}%</span>
+          </div>
+          <p className="text-xs text-muted mb-2">~42% del gasto en España. Evita huelgas generales y exclusión; bajar de 20% causa protestas.</p>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={alloc.social ?? 40}
+            onChange={(e) => handleSliderChange('social', e.target.value)}
+          />
+        </div>
+
         <div className="ministry-card glass-panel p-3">
           <div className="d-flex justify-between align-center mb-1">
             <span className="d-flex align-center gap-1 text-sm font-bold text-success">

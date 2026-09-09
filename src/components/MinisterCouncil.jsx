@@ -86,8 +86,34 @@ export const MinisterCouncil = ({ state, creditRating }) => {
     secColor = 'var(--danger)';
   }
 
+  // 5. Ministra de Inclusión, Seguridad Social y Pensiones
+  const socialAlloc = state.ministryAllocations?.social ?? 40;
+  const unempRate = state.unemploymentRate !== undefined ? state.unemploymentRate : 14.0;
+  let socialAvatar = '👵';
+  let socialStatus = 'Paz Social';
+  let socialQuote = 'Las pensiones y subsidios llegan puntuales a cada hogar.';
+  let socialColor = '#ec4899';
+
+  if (socialAlloc < 20) {
+    socialAvatar = '📢';
+    socialStatus = '¡Alerta de Huelga!';
+    socialQuote = '¡El tijeretazo a las pensiones y subsidios incendiará las calles! ¡Reconsidere esa asignación!';
+    socialColor = 'var(--danger)';
+  } else if (unempRate >= 20) {
+    socialAvatar = '😰';
+    socialStatus = 'Colapso por Desempleo';
+    socialQuote = `Con un ${unempRate.toFixed(1)}% de paro, las oficinas de empleo están desbordadas y las prestaciones se disparan.`;
+    socialColor = 'var(--warning)';
+  } else if (socialAlloc >= 45) {
+    socialAvatar = '🕊️';
+    socialStatus = 'Escudo Blindado';
+    socialQuote = 'Protección integral garantizada. La cohesión social y la tranquilidad ciudadana son máximas.';
+    socialColor = '#ec4899';
+  }
+
   const ministers = [
     { name: 'Don Bernardo', role: 'Finanzas', avatar: financeAvatar, status: financeStatus, quote: financeQuote, color: financeColor },
+    { name: 'Dña. Carmen', role: 'Seguridad Social', avatar: socialAvatar, status: socialStatus, quote: socialQuote, color: socialColor },
     { name: 'Dra. Elena', role: 'Salud Pública', avatar: healthAvatar, status: healthStatus, quote: healthQuote, color: healthColor },
     { name: 'Dr. Turing', role: 'Ciencia e I+D', avatar: scienceAvatar, status: scienceStatus, quote: scienceQuote, color: scienceColor },
     { name: 'Capitana Valiente', role: 'Seguridad', avatar: secAvatar, status: secStatus, quote: secQuote, color: secColor }

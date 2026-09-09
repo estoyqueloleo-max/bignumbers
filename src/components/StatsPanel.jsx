@@ -22,9 +22,32 @@ export const StatsPanel = ({
 
   return (
     <div className="glass-panel stats-panel">
-      <h3 className="d-flex align-center mb-4" style={{ gap: '0.5rem' }}>
-        <DollarSign className="text-cyan" /> Finanzas del Estado
-      </h3>
+      <div className="d-flex justify-between align-center mb-4 flex-wrap gap-2">
+        <h3 className="d-flex align-center m-0" style={{ gap: '0.5rem' }}>
+          <DollarSign className="text-cyan" /> Finanzas del Estado
+        </h3>
+        <div className="d-flex align-center gap-2 flex-wrap">
+          {state.realDataYear && (
+            <span className="badge text-xs" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8', borderColor: 'rgba(99,102,241,0.3)' }}>
+              🇪🇸 España {state.realDataYear}
+            </span>
+          )}
+          <span className="badge text-xs" style={{
+            background: (state.unemploymentRate || 14) > 18 ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)',
+            borderColor: (state.unemploymentRate || 14) > 18 ? 'var(--danger)' : 'var(--warning)',
+            color: (state.unemploymentRate || 14) > 18 ? 'var(--danger)' : 'var(--warning)'
+          }}>
+            Paro: {(state.unemploymentRate !== undefined ? state.unemploymentRate : 14.0).toFixed(1)}%
+          </span>
+          <span className="badge text-xs" style={{
+            background: 'rgba(236,72,153,0.1)',
+            borderColor: '#ec4899',
+            color: '#ec4899'
+          }}>
+            Paz: {state.socialPeace || 85}%
+          </span>
+        </div>
+      </div>
 
       <div className="stat-grid mb-4">
         <div className="stat-card">

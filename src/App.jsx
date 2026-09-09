@@ -21,9 +21,11 @@ import { NationalGazette } from './components/NationalGazette';
 import { PostGameModal } from './components/PostGameModal';
 import { Milestones } from './components/Milestones';
 import { HUD } from './components/HUD';
+import { YearPickerModal } from './components/YearPickerModal';
+import { DataCatalogModal } from './components/DataCatalogModal';
 import { NumberingSystems } from './utils/formatters';
 import { playWinSound, setAudioMuted, getAudioMuted } from './utils/audio';
-import { Play, Pause, FastForward, Skull, Trophy, Layers, Flag, Landmark, DollarSign, Cpu, RadioTower, Globe, Sliders, ShieldCheck, Mail, Printer, Command, Search } from 'lucide-react';
+import { Play, Pause, FastForward, Skull, Trophy, Layers, Flag, Landmark, DollarSign, Cpu, RadioTower, Globe, Sliders, ShieldCheck, Mail, Printer, Command, Search, CalendarDays, Database } from 'lucide-react';
 
 function App() {
   const {
@@ -51,6 +53,7 @@ function App() {
     withdrawSovereignFund,
     applyAssemblyImpact,
     loadScenario,
+    loadRealDataScenario,
     resetGame,
     screenShake
   } = useGameLoop();
@@ -68,6 +71,8 @@ function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showTechTreeModal, setShowTechTreeModal] = useState(false);
   const [showP2PRoomModal, setShowP2PRoomModal] = useState(false);
+  const [showYearPickerModal, setShowYearPickerModal] = useState(false);
+  const [showDataCatalogModal, setShowDataCatalogModal] = useState(false);
   const [showTutorial, setShowTutorial] = useState(() => {
     return localStorage.getItem('bigNumbers_hideTutorial') !== 'true';
   });
@@ -129,6 +134,8 @@ function App() {
     openRules: () => setShowRulesModal(true),
     openGazetteExport: () => setShowGazetteExportModal(true),
     openP2PRoom: () => setShowP2PRoomModal(true),
+    openYearPicker: () => setShowYearPickerModal(true),
+    openDataCatalog: () => setShowDataCatalogModal(true),
     togglePlay: () => setIsRunning(prev => !prev),
     setSpeed: (s) => setTimeSpeed(s),
     issueBonds: () => issueBonds(500000000),
@@ -200,6 +207,18 @@ function App() {
         state={state}
         numberingSystem={numberingSystem}
       />
+      {showYearPickerModal && (
+        <YearPickerModal
+          onClose={() => setShowYearPickerModal(false)}
+          onApply={loadRealDataScenario}
+        />
+      )}
+      {showDataCatalogModal && (
+        <DataCatalogModal
+          onClose={() => setShowDataCatalogModal(false)}
+          initialYear={state.realDataYear || 2023}
+        />
+      )}
       <P2PRoomModal
         isOpen={showP2PRoomModal}
         onClose={() => setShowP2PRoomModal(false)}
@@ -253,9 +272,35 @@ function App() {
           </button>
 
           <button
+            id="btn-real-data"
+            className="btn btn-outline btn-sm d-flex align-center gap-1"
+            onClick={() => setShowYearPickerModal(true)}
+            title="Cargar datos macroeconómicos reales de España por año"
+            style={state.realDataYear ? { borderColor: '#6366f1', color: '#a5b4fc' } : {}}
+          >
+            <CalendarDays size={15} style={{ color: state.realDataYear ? '#6366f1' : undefined }} />
+            <span className="hide-mobile">Datos Reales</span>
+            {state.realDataYear && (
+              <span className="badge" style={{ background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.65rem' }}>
+                🇪🇸 {state.realDataYear}
+              </span>
+            )}
+          </button>
+
+          <button
+            id="btn-data-catalog"
+            className="btn btn-outline btn-sm d-flex align-center gap-1"
+            onClick={() => setShowDataCatalogModal(true)}
+            title="Catálogo de datos: documentación viva de qué cifra viene de dónde"
+          >
+            <Database size={15} className="text-muted" />
+            <span className="hide-mobile">Catálogo</span>
+          </button>
+
+          <button
             className="btn btn-outline btn-sm d-flex align-center gap-1"
             onClick={() => setShowAssemblyModal(true)}
-            title="Asamblea de Naciones: Dilema del Prisionero & Efecto Ender"
+            title="Asamblea de Naciones: Dilema del Prisionero &amp; Efecto Ender"
           >
             <Globe size={16} className="text-warning" />
             <span className="hide-mobile">Asamblea</span>
