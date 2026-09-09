@@ -15,7 +15,8 @@ export const HUD = ({
   onOpenRules,
   onOpenPassport,
   onOpenDiplomacy,
-  onOpenGazetteExport
+  onOpenGazetteExport,
+  onOpenABM
 }) => {
   const [shared, setShared] = useState(false);
   const timeEq = getRealWorldTimeEquivalent(state.treasury);
@@ -53,6 +54,18 @@ Mandato en el mes ${state.month}.
             <Flag size={14} className="text-cyan" />
             <span>{currentScenario.name}</span>
             <span className="badge badge-cyan text-xs">{currentScenario.tag}</span>
+          </button>
+
+          <button
+            id="hud-open-abm-btn"
+            className="btn btn-outline btn-xs d-flex align-center gap-1"
+            onClick={onOpenABM}
+            title="Micro-Mundo ABM: Simulación Basada en 2.500 Agentes"
+            style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(56, 189, 248, 0.1)' }}
+          >
+            <Users size={14} className="text-cyan" />
+            <span className="text-cyan font-bold">Micro-Mundo ABM</span>
+            <span className="badge badge-cyan text-xs">2.500 Agentes</span>
           </button>
 
           <button

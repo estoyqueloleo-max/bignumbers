@@ -23,9 +23,10 @@ import { Milestones } from './components/Milestones';
 import { HUD } from './components/HUD';
 import { YearPickerModal } from './components/YearPickerModal';
 import { DataCatalogModal } from './components/DataCatalogModal';
+import { ABMVisualizerModal } from './components/ABMVisualizerModal';
 import { NumberingSystems } from './utils/formatters';
 import { playWinSound, setAudioMuted, getAudioMuted } from './utils/audio';
-import { Play, Pause, FastForward, Skull, Trophy, Layers, Flag, Landmark, DollarSign, Cpu, RadioTower, Globe, Sliders, ShieldCheck, Mail, Printer, Command, Search, CalendarDays, Database } from 'lucide-react';
+import { Play, Pause, FastForward, Skull, Trophy, Layers, Flag, Landmark, DollarSign, Cpu, RadioTower, Globe, Sliders, ShieldCheck, Mail, Printer, Command, Search, CalendarDays, Database, Users } from 'lucide-react';
 
 function App() {
   const {
@@ -73,6 +74,7 @@ function App() {
   const [showP2PRoomModal, setShowP2PRoomModal] = useState(false);
   const [showYearPickerModal, setShowYearPickerModal] = useState(false);
   const [showDataCatalogModal, setShowDataCatalogModal] = useState(false);
+  const [showABMModal, setShowABMModal] = useState(false);
   const [showTutorial, setShowTutorial] = useState(() => {
     return localStorage.getItem('bigNumbers_hideTutorial') !== 'true';
   });
@@ -136,6 +138,7 @@ function App() {
     openP2PRoom: () => setShowP2PRoomModal(true),
     openYearPicker: () => setShowYearPickerModal(true),
     openDataCatalog: () => setShowDataCatalogModal(true),
+    openABMVisualizer: () => setShowABMModal(true),
     togglePlay: () => setIsRunning(prev => !prev),
     setSpeed: (s) => setTimeSpeed(s),
     issueBonds: () => issueBonds(500000000),
@@ -219,6 +222,13 @@ function App() {
           initialYear={state.realDataYear || 2023}
         />
       )}
+      {showABMModal && (
+        <ABMVisualizerModal
+          onClose={() => setShowABMModal(false)}
+          gameState={state}
+          numberingSystem={numberingSystem}
+        />
+      )}
       <P2PRoomModal
         isOpen={showP2PRoomModal}
         onClose={() => setShowP2PRoomModal(false)}
@@ -298,6 +308,18 @@ function App() {
           </button>
 
           <button
+            id="btn-abm-visualizer"
+            className="btn btn-outline btn-sm d-flex align-center gap-1"
+            onClick={() => setShowABMModal(true)}
+            title="Micro-Mundo ABM: Simulación Basada en 2.500 Agentes"
+            style={{ borderColor: 'rgba(56, 189, 248, 0.5)', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.08)' }}
+          >
+            <Users size={15} className="text-cyan" />
+            <span className="hide-mobile font-bold">Micro-Mundo ABM</span>
+            <span className="badge text-xs" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8' }}>2.5k</span>
+          </button>
+
+          <button
             className="btn btn-outline btn-sm d-flex align-center gap-1"
             onClick={() => setShowAssemblyModal(true)}
             title="Asamblea de Naciones: Dilema del Prisionero &amp; Efecto Ender"
@@ -370,6 +392,7 @@ function App() {
         onOpenPassport={() => setShowPassportModal(true)}
         onOpenDiplomacy={() => setShowDiplomacyModal(true)}
         onOpenGazetteExport={() => setShowGazetteExportModal(true)}
+        onOpenABM={() => setShowABMModal(true)}
       />
 
       {/* PERIÓDICO SATÍRICO / GACETA NACIONAL */}

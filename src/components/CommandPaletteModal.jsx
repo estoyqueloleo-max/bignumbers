@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Globe, Layers, Flag, ShieldCheck, Mail, Sliders, Printer, Wifi, Play, Pause, FastForward, DollarSign, Trees, X, Command } from 'lucide-react';
+import { Search, Globe, Layers, Flag, ShieldCheck, Mail, Sliders, Printer, Wifi, Play, Pause, FastForward, DollarSign, Trees, X, Command, Users, CalendarDays, Database } from 'lucide-react';
 
 export const CommandPaletteModal = ({
   isOpen,
@@ -11,6 +11,9 @@ export const CommandPaletteModal = ({
   const inputRef = useRef(null);
 
   const commandList = [
+    { id: 'abm_world', title: 'Micro-Mundo ABM: Simulación Basada en 2.500 Agentes', icon: <Users size={16} className="text-cyan" />, action: actions.openABMVisualizer },
+    { id: 'real_data', title: 'Cargar Datos Macroeconómicos Reales de España (2010–2024)', icon: <CalendarDays size={16} className="text-cyan" />, action: actions.openYearPicker },
+    { id: 'data_catalog', title: 'Abrir Catálogo de Datos & Documentación Viva', icon: <Database size={16} className="text-muted" />, action: actions.openDataCatalog },
     { id: 'assembly', title: 'Abrir Asamblea Global (Dilema del Prisionero & Efecto Ender)', icon: <Globe size={16} className="text-warning" />, action: actions.openAssembly },
     { id: 'techtree', title: 'Abrir Árbol Tecnológico en Grafo & Megaproyectos', icon: <Trees size={16} className="text-cyan" />, action: actions.openTechTree },
     { id: 'scale', title: 'Abrir Visor de Magnitudes & Potencias de 10', icon: <Layers size={16} className="text-warning" />, action: actions.openScale },
