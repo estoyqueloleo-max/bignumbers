@@ -926,3 +926,166 @@ export const convertToGameState = (yearData) => {
   };
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DEBT_TIMELINE — Serie histórica de deuda 1980-2024
+//
+// Fuentes:
+//   - 1980-1999: Banco de España, Serie Histórica de Cuentas Financieras
+//   - 2000-2024: Eurostat gov_10dd_edpt1 (Protocolo de Déficit Excesivo — PDE)
+//   - Tipos de interés bono 10Y: FRED / Banco de España / BCE
+//
+// Cada entrada:
+//   year         → Año del dato
+//   debtPctGdp   → Deuda / PIB en %
+//   debtBn       → Deuda absoluta en miles de millones de €
+//   interestRate → Tipo del bono soberano 10Y (%)
+//   govt         → Partido en el gobierno
+//   event        → Evento histórico clave (null si no hay hito)
+// ─────────────────────────────────────────────────────────────────────────────
+export const DEBT_TIMELINE = [
+  { year: 1980, debtPctGdp: 17.8, debtBn:  30,  interestRate: 16.0, govt: 'UCD',  event: null },
+  { year: 1981, debtPctGdp: 22.2, debtBn:  39,  interestRate: 15.8, govt: 'UCD',  event: null },
+  { year: 1982, debtPctGdp: 30.1, debtBn:  55,  interestRate: 16.5, govt: 'PSOE', event: '🗳️ PSOE gana con mayoría absoluta (González)' },
+  { year: 1983, debtPctGdp: 33.0, debtBn:  63,  interestRate: 16.7, govt: 'PSOE', event: null },
+  { year: 1984, debtPctGdp: 36.5, debtBn:  72,  interestRate: 14.9, govt: 'PSOE', event: null },
+  { year: 1985, debtPctGdp: 40.1, debtBn:  83,  interestRate: 13.4, govt: 'PSOE', event: null },
+  { year: 1986, debtPctGdp: 44.0, debtBn:  96,  interestRate: 11.8, govt: 'PSOE', event: '🇪🇺 Ingreso en la CEE (1 enero 1986)' },
+  { year: 1987, debtPctGdp: 44.9, debtBn: 105,  interestRate: 12.8, govt: 'PSOE', event: null },
+  { year: 1988, debtPctGdp: 40.7, debtBn: 101,  interestRate: 11.7, govt: 'PSOE', event: null },
+  { year: 1989, debtPctGdp: 42.3, debtBn: 115,  interestRate: 13.7, govt: 'PSOE', event: null },
+  { year: 1990, debtPctGdp: 42.2, debtBn: 124,  interestRate: 14.7, govt: 'PSOE', event: null },
+  { year: 1991, debtPctGdp: 44.3, debtBn: 137,  interestRate: 12.4, govt: 'PSOE', event: null },
+  { year: 1992, debtPctGdp: 47.9, debtBn: 155,  interestRate: 12.2, govt: 'PSOE', event: '🏅 JJ.OO. Barcelona y Expo Sevilla. Crisis del SME' },
+  { year: 1993, debtPctGdp: 57.2, debtBn: 193,  interestRate: 10.2, govt: 'PSOE', event: '📉 Recesión. España devalúa la peseta 3 veces en 1 año' },
+  { year: 1994, debtPctGdp: 60.0, debtBn: 213,  interestRate:  9.5, govt: 'PSOE', event: null },
+  { year: 1995, debtPctGdp: 63.2, debtBn: 233,  interestRate:  9.1, govt: 'PSOE', event: null },
+  { year: 1996, debtPctGdp: 67.3, debtBn: 257,  interestRate:  8.7, govt: 'PP',   event: '🗳️ PP (Aznar). Inicio convergencia Maastricht' },
+  { year: 1997, debtPctGdp: 66.1, debtBn: 262,  interestRate:  6.4, govt: 'PP',   event: null },
+  { year: 1998, debtPctGdp: 64.1, debtBn: 264,  interestRate:  4.8, govt: 'PP',   event: null },
+  { year: 1999, debtPctGdp: 62.3, debtBn: 267,  interestRate:  3.9, govt: 'PP',   event: '💶 Creación del Euro (tipo fijo peseta → €)' },
+  { year: 2000, debtPctGdp: 59.3, debtBn: 268,  interestRate:  5.5, govt: 'PP',   event: null },
+  { year: 2001, debtPctGdp: 55.5, debtBn: 262,  interestRate:  5.2, govt: 'PP',   event: null },
+  { year: 2002, debtPctGdp: 52.5, debtBn: 261,  interestRate:  5.1, govt: 'PP',   event: null },
+  { year: 2003, debtPctGdp: 48.7, debtBn: 252,  interestRate:  4.1, govt: 'PP',   event: null },
+  { year: 2004, debtPctGdp: 46.2, debtBn: 249,  interestRate:  4.1, govt: 'PSOE', event: '🗳️ PSOE (Zapatero). Burbuja inmobiliaria en su apogeo' },
+  { year: 2005, debtPctGdp: 43.0, debtBn: 245,  interestRate:  3.4, govt: 'PSOE', event: null },
+  { year: 2006, debtPctGdp: 39.6, debtBn: 239,  interestRate:  3.8, govt: 'PSOE', event: null },
+  { year: 2007, debtPctGdp: 35.6, debtBn: 228,  interestRate:  4.3, govt: 'PSOE', event: '🏠 Mínimo histórico de deuda. 800.000 viviendas/año.' },
+  { year: 2008, debtPctGdp: 39.5, debtBn: 263,  interestRate:  4.4, govt: 'PSOE', event: '💥 Crisis financiera global. Lehman Brothers. Fin de la burbuja.' },
+  { year: 2009, debtPctGdp: 53.0, debtBn: 378,  interestRate:  3.9, govt: 'PSOE', event: '📉 PIB cae -3.8%. Paro supera el 18%. Plan E (8.000 M€)' },
+  { year: 2010, debtPctGdp: 60.1, debtBn: 445,  interestRate:  4.2, govt: 'PSOE', event: '✂️ Primer gran plan de ajuste: recorte del 5% a funcionarios' },
+  { year: 2011, debtPctGdp: 69.5, debtBn: 509,  interestRate:  5.4, govt: 'PP',   event: '🗳️ PP (Rajoy). Crisis deuda soberana euro.' },
+  { year: 2012, debtPctGdp: 85.7, debtBn: 642,  interestRate:  6.4, govt: 'PP',   event: '🚨 Prima de riesgo: 640 pb. Rescate bancario 41.000 M€. Draghi: "whatever it takes"' },
+  { year: 2013, debtPctGdp: 95.5, debtBn: 724,  interestRate:  4.6, govt: 'PP',   event: '📉 Paro: 26,1% (máximo histórico)' },
+  { year: 2014, debtPctGdp: 100.4, debtBn: 775, interestRate:  2.7, govt: 'PP',   event: '⛽ Primera vez que la deuda supera el 100% del PIB' },
+  { year: 2015, debtPctGdp: 99.3, debtBn: 779,  interestRate:  1.7, govt: 'PP',   event: '📈 BCE inicia QE. Recuperación (+3.8% PIB)' },
+  { year: 2016, debtPctGdp: 99.0, debtBn: 790,  interestRate:  1.4, govt: 'PP',   event: '🏛️ España en funciones 10 meses (2 elecciones sin gobierno)' },
+  { year: 2017, debtPctGdp: 98.6, debtBn: 803,  interestRate:  1.6, govt: 'PP',   event: null },
+  { year: 2018, debtPctGdp: 97.4, debtBn: 805,  interestRate:  1.4, govt: 'PSOE', event: '🗳️ Moción de censura: PSOE (Sánchez)' },
+  { year: 2019, debtPctGdp: 95.5, debtBn: 799,  interestRate:  0.5, govt: 'PSOE', event: '✂️ Deuda baja por primera vez desde 2007.' },
+  { year: 2020, debtPctGdp: 120.0, debtBn: 1079, interestRate:  0.3, govt: 'PSOE', event: '😷 COVID-19. PIB cae -10.8%. Mayor gasto de emergencia en 80 años.' },
+  { year: 2021, debtPctGdp: 118.7, debtBn: 1082, interestRate:  0.4, govt: 'PSOE', event: '💉 NextGen EU (77.000 M€). Recuperación +5.5%.' },
+  { year: 2022, debtPctGdp: 113.2, debtBn: 1075, interestRate:  2.6, govt: 'PSOE', event: '⚡ Inflación 8.4%. Guerra Ucrania. BCE sube tipos 250 pb.' },
+  { year: 2023, debtPctGdp: 107.7, debtBn: 1059, interestRate:  3.6, govt: 'PSOE', event: '📈 PIB +2.5%. Turismo récord (85M visitantes).' },
+  { year: 2024, debtPctGdp: 103.5, debtBn: 1065, interestRate:  3.2, govt: 'PSOE', event: '🏦 BCE empieza a bajar tipos. Deuda/PIB baja por inflación nominal.' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EPA_DATA — Encuesta de Población Activa (INE) — últimos 8 trimestres
+//
+// Fuente: INE EPA trimestral — https://www.ine.es/dyngs/INEbase/es/operacion.htm?c=Estadistica_C&cid=1254736176918
+// Última actualización disponible: 2T 2024
+//
+// Cada entrada:
+//   quarter          → Identificador del trimestre (e.g. "1T2024")
+//   label            → Etiqueta para el selector de la UI
+//   year / q         → Año y número de trimestre
+//   unemploymentRate → Tasa de paro EPA (%)
+//   employedPct      → % activos en empleo privado
+//   publicWorkerPct  → % activos en empleo público
+//   retiredPct       → % de la población total jubilados
+//   firmOwnerPct     → % activos autónomos / empresarios
+//   unemploymentByAge → { '16-24': %, '25-44': %, '45-64': % }
+//   sectorDist       → { services, industry, construction, agriculture } en %
+//   medianWage       → Salario mediano mensual bruto (€)
+//   genderWageGap    → Brecha salarial de género (%)
+// ─────────────────────────────────────────────────────────────────────────────
+export const EPA_DATA = [
+  {
+    quarter: '3T2022', label: '3er Trim. 2022', year: 2022, q: 3,
+    unemploymentRate: 12.67,
+    employedPct: 46.1, publicWorkerPct: 8.2, retiredPct: 21.8, firmOwnerPct: 10.9,
+    unemploymentByAge: { '16-24': 28.9, '25-44': 10.8, '45-64': 9.7 },
+    sectorDist: { services: 76.2, industry: 13.5, construction: 6.4, agriculture: 3.9 },
+    medianWage: 1890, genderWageGap: 17.2,
+  },
+  {
+    quarter: '4T2022', label: '4º Trim. 2022', year: 2022, q: 4,
+    unemploymentRate: 12.87,
+    employedPct: 45.9, publicWorkerPct: 8.3, retiredPct: 21.9, firmOwnerPct: 10.8,
+    unemploymentByAge: { '16-24': 30.2, '25-44': 11.0, '45-64': 9.8 },
+    sectorDist: { services: 76.5, industry: 13.2, construction: 6.4, agriculture: 3.9 },
+    medianWage: 1905, genderWageGap: 17.1,
+  },
+  {
+    quarter: '1T2023', label: '1er Trim. 2023', year: 2023, q: 1,
+    unemploymentRate: 13.26,
+    employedPct: 45.7, publicWorkerPct: 8.4, retiredPct: 22.1, firmOwnerPct: 10.6,
+    unemploymentByAge: { '16-24': 30.8, '25-44': 11.3, '45-64': 10.2 },
+    sectorDist: { services: 76.8, industry: 13.0, construction: 6.3, agriculture: 3.9 },
+    medianWage: 1940, genderWageGap: 16.8,
+  },
+  {
+    quarter: '2T2023', label: '2º Trim. 2023', year: 2023, q: 2,
+    unemploymentRate: 11.60,
+    employedPct: 46.5, publicWorkerPct: 8.3, retiredPct: 22.2, firmOwnerPct: 10.7,
+    unemploymentByAge: { '16-24': 27.9, '25-44': 9.8, '45-64': 9.1 },
+    sectorDist: { services: 77.1, industry: 12.8, construction: 6.4, agriculture: 3.7 },
+    medianWage: 1960, genderWageGap: 16.5,
+  },
+  {
+    quarter: '3T2023', label: '3er Trim. 2023', year: 2023, q: 3,
+    unemploymentRate: 11.33,
+    employedPct: 46.7, publicWorkerPct: 8.4, retiredPct: 22.3, firmOwnerPct: 10.8,
+    unemploymentByAge: { '16-24': 27.2, '25-44': 9.5, '45-64': 8.9 },
+    sectorDist: { services: 77.3, industry: 12.7, construction: 6.4, agriculture: 3.6 },
+    medianWage: 1975, genderWageGap: 16.3,
+  },
+  {
+    quarter: '4T2023', label: '4º Trim. 2023', year: 2023, q: 4,
+    unemploymentRate: 11.76,
+    employedPct: 46.5, publicWorkerPct: 8.5, retiredPct: 22.4, firmOwnerPct: 10.7,
+    unemploymentByAge: { '16-24': 28.1, '25-44': 9.9, '45-64': 9.2 },
+    sectorDist: { services: 77.5, industry: 12.6, construction: 6.3, agriculture: 3.6 },
+    medianWage: 1995, genderWageGap: 16.1,
+  },
+  {
+    quarter: '1T2024', label: '1er Trim. 2024 ★', year: 2024, q: 1,
+    unemploymentRate: 12.29,
+    employedPct: 46.3, publicWorkerPct: 8.5, retiredPct: 22.6, firmOwnerPct: 10.6,
+    unemploymentByAge: { '16-24': 28.9, '25-44': 10.5, '45-64': 9.6 },
+    sectorDist: { services: 77.8, industry: 12.4, construction: 6.3, agriculture: 3.5 },
+    medianWage: 2020, genderWageGap: 15.8,
+  },
+  {
+    quarter: '2T2024', label: '2º Trim. 2024 (más reciente)', year: 2024, q: 2,
+    unemploymentRate: 11.27,
+    employedPct: 46.9, publicWorkerPct: 8.6, retiredPct: 22.7, firmOwnerPct: 10.7,
+    unemploymentByAge: { '16-24': 26.8, '25-44': 9.2, '45-64': 8.7 },
+    sectorDist: { services: 78.0, industry: 12.3, construction: 6.3, agriculture: 3.4 },
+    medianWage: 2055, genderWageGap: 15.5,
+  },
+];
+
+/** Trimestre más reciente disponible (valor por defecto para calibración EPA) */
+export const LATEST_EPA_QUARTER = '2T2024';
+
+/**
+ * Convierte un identificador de trimestre EPA en los parámetros de calibración
+ * para createABMPopulation(). Devuelve null si no se encuentra el trimestre.
+ * @param {string} quarter - e.g. '2T2024'
+ * @returns {object|null} epaCalibration object
+ */
+export function getEPACalibration(quarter) {
+  return EPA_DATA.find(d => d.quarter === quarter) || null;
+}

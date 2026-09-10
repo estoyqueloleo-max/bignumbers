@@ -52,10 +52,18 @@ export function getRandomName() {
  * @param {number} count - Número de agentes a generar (ej. 2500)
  * @param {object} baseConfig - Configuración base del estado del juego
  * @param {object} abmCalibration - Calibración salarial real por sub-cohort (de getDebtLabData)
+ * @param {object|null} epaCalibration - Calibración estructural desde EPA real (de getEPACalibration)
+ *   Si se provee, sobreescribe las proporciones fijas de cohortes con las de la EPA real del trimestre.
  */
-export function createABMPopulation(count = 2500, baseConfig = {}, abmCalibration = {}) {
+export function createABMPopulation(count = 2500, baseConfig = {}, abmCalibration = {}, epaCalibration = null) {
   const baseIncome = baseConfig.baseIncomePerCapita || 1800;
-  const targetUnempRate = (baseConfig.unemploymentRate !== undefined ? baseConfig.unemploymentRate : 14.0) / 100;
+  // Tasa de paro: EPA real si disponible, sino la del año del juego o fallback
+  const targetUnempRate = epaCalibration
+    ? epaCalibration.unemploymentRate / 100
+    : (baseConfig.unemploymentRate !== undefined ? baseConfig.unemploymentRate : 14.0) / 100;
+
+  // Salario mediano real de la EPA (si disponible) sobreescribe baseIncome para empleados privados
+  const epaMedianWage = epaCalibration ? epaCalibration.medianWage : null;
 
   // Salarios reales por sub-cohort de funcionario (fallback a valores 2019)
   const wageCalib = {
@@ -65,6 +73,14 @@ export function createABMPopulation(count = 2500, baseConfig = {}, abmCalibratio
     admin:     abmCalibration.admin     || 2080,
     justice:   abmCalibration.justice   || 2760,
   };
+
+  // Proporciones de la población: EPA real (si disponible) o proporciones fijas
+  // EPA proporciona % de la población activa; convertimos a % del total de agentes
+  const pctRetired      = epaCalibration ? epaCalibration.retiredPct / 100          : 0.22;
+  const pctPublicWorker = epaCalibration ? epaCalibration.publicWorkerPct / 100      : 0.08;
+  const pctFirmOwner    = epaCalibration ? epaCalibration.firmOwnerPct / 100         : 0.12;
+  const pctActivePrivate = 1 - (pctRetired + pctPublicWorker + pctFirmOwner);
+  const pctUnemployed   = pctActivePrivate * targetUnempRate;
 
   // Proporciones objetivo de sub-cohorts públicos (por función, proporcionales al empleo real)
   // Educación 32%, Sanidad 26%, Admin 21%, Defensa 9%, Justicia 7%, Otros 5%
@@ -83,12 +99,6 @@ export function createABMPopulation(count = 2500, baseConfig = {}, abmCalibratio
     cumulativePublicWeight += sc.weight;
     return { ...sc, cumWeight: cumulativePublicWeight };
   });
-
-  const pctRetired = 0.22;
-  const pctPublicWorker = 0.08; // ~8% de la población activa
-  const pctFirmOwner = 0.12;
-  const pctActivePrivate = 1 - (pctRetired + pctPublicWorker + pctFirmOwner); // ~0.58
-  const pctUnemployed = pctActivePrivate * targetUnempRate;
 
   const agents = [];
   const firms = [];
@@ -115,7 +125,9 @@ export function createABMPopulation(count = 2500, baseConfig = {}, abmCalibratio
       cohort = sc.key;
       subLabel = sc.label;
       age = Math.floor(25 + Math.random() * 38);
-      income = Math.floor(sc.income * (0.85 + Math.random() * 0.35)); // Variación salarial real ±20%
+      // Brecha salarial de género: si EPA disponible, aplicarla para agentes femeninos
+      const gapFactor = (epaCalibration && Math.random() > 0.5) ? (1 - epaCalibration.genderWageGap / 100) : 1;
+      income = Math.floor(sc.income * (0.85 + Math.random() * 0.35) * gapFactor); // Variación salarial real ±20%
     } else if (roll < pctRetired + pctPublicWorker + pctFirmOwner) {
       cohort = 'firm_owner';
       age = Math.floor(30 + Math.random() * 32);
@@ -129,7 +141,8 @@ export function createABMPopulation(count = 2500, baseConfig = {}, abmCalibratio
     } else {
       cohort = 'employed';
       age = Math.floor(22 + Math.random() * 42);
-      income = Math.floor(baseIncome * (0.7 + Math.random() * 0.6)); // Salario asalariado
+      const effectiveBaseWage = epaMedianWage || baseIncome;
+      income = Math.floor(effectiveBaseWage * (0.7 + Math.random() * 0.6)); // Salario asalariado
     }
 
     // Ubicación espacial por distrito

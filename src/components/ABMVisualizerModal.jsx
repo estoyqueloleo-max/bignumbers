@@ -9,11 +9,20 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useABMSimulation } from '../hooks/useABMSimulation';
 import { formatCurrency } from '../utils/formatters';
-import { getDebtLabData, SPAIN_DATA, DEFAULT_YEAR } from '../utils/spainDataCatalog';
+import {
+  getDebtLabData,
+  SPAIN_DATA,
+  DEFAULT_YEAR,
+  DEBT_TIMELINE,
+  EPA_DATA,
+  LATEST_EPA_QUARTER,
+  getEPACalibration
+} from '../utils/spainDataCatalog';
 import {
   Users, Play, Pause, StepForward, RotateCcw, AlertTriangle,
   TrendingUp, TrendingDown, DollarSign, Activity, Sparkles,
-  Building2, Flame, Heart, HeartHandshake, ShieldCheck, Zap, X, Search, Landmark
+  Building2, Flame, Heart, HeartHandshake, ShieldCheck, Zap, X, Search, Landmark,
+  Clock, Calendar, History, CheckCircle2
 } from 'lucide-react';
 
 const COHORT_META = {
@@ -36,6 +45,13 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const [activeTab, setActiveTab] = useState('canvas'); // 'canvas' | 'debtlab'
 
+  // Calibración EPA trimestral real
+  const [epaQuarter, setEpaQuarter] = useState(LATEST_EPA_QUARTER);
+  const epaCalibration = useMemo(() => getEPACalibration(epaQuarter), [epaQuarter]);
+
+  // Máquina del tiempo de la deuda (1980-2024)
+  const [timelineYear, setTimelineYear] = useState(2024);
+
   // Datos del DebtLab para el año actual de datos reales
   const debtLabYear = gameState?.realDataYear || DEFAULT_YEAR;
   const debtLab = useMemo(() => getDebtLabData(debtLabYear), [debtLabYear]);
@@ -56,7 +72,44 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
     setSelectedAgentId,
     findAgentAt,
     resetPopulation,
-  } = useABMSimulation(gameState, false, speedMultiplier);
+  } = useABMSimulation(gameState, false, speedMultiplier, epaCalibration, debtLab?.abmCalibration);
+
+  // Entrada de la serie histórica para el año de la máquina del tiempo
+  const activeTimelineEntry = useMemo(() => {
+    return DEBT_TIMELINE.find(d => d.year === timelineYear) || DEBT_TIMELINE[DEBT_TIMELINE.length - 1];
+  }, [timelineYear]);
+
+  // Cálculo de coordenadas geométricas para el SVG del gráfico de deuda 1980-2024
+  const timelineSvg = useMemo(() => {
+    if (!DEBT_TIMELINE || DEBT_TIMELINE.length === 0) return null;
+    const w = 760;
+    const h = 180;
+    const padL = 44;
+    const padR = 24;
+    const padT = 20;
+    const padB = 34;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const minYear = 1980;
+    const maxYear = 2024;
+    const maxDebt = 130; // escala 0% - 130% PIB
+
+    const getX = (year) => padL + ((year - minYear) / (maxYear - minYear)) * plotW;
+    const getY = (debtPct) => (padT + plotH) - (Math.min(maxDebt, Math.max(0, debtPct)) / maxDebt) * plotH;
+
+    const points = DEBT_TIMELINE.map(d => ({
+      x: getX(d.year),
+      y: getY(d.debtPctGdp),
+      ...d
+    }));
+
+    const linePath = points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`, '');
+    const areaPath = `${linePath} L ${points[points.length - 1].x.toFixed(1)} ${(padT + plotH).toFixed(1)} L ${points[0].x.toFixed(1)} ${(padT + plotH).toFixed(1)} Z`;
+
+    const selectedPoint = points.find(p => p.year === timelineYear) || points[points.length - 1];
+
+    return { w, h, padL, padR, padT, padB, plotW, plotH, points, linePath, areaPath, selectedPoint, getX, getY };
+  }, [timelineYear]);
 
   // Render loop continuo a 60fps en Canvas para partículas y movimiento de agentes
   useEffect(() => {
@@ -459,6 +512,122 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
             gap: '14px',
             background: 'rgba(10, 16, 26, 0.95)',
           }}>
+            {/* 0. CALIBRACIÓN DEMOGRÁFICA REAL (INE EPA) */}
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.04)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              borderRadius: '12px',
+              padding: '14px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 800, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>📊</span> Calibración Demográfica Real (INE EPA)
+                </h4>
+                <span className="badge text-xs" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', borderColor: '#10b981' }}>
+                  {epaQuarter}
+                </span>
+              </div>
+
+              <p style={{ margin: '0 0 10px', fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                Estructura la micro-población de 2.500 agentes con las tasas reales de la Encuesta de Población Activa (paro, sueldos y sectores).
+              </p>
+
+              {/* SELECTOR DE TRIMESTRE EPA */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                <select
+                  id="epa-quarter-select"
+                  value={epaQuarter}
+                  onChange={e => setEpaQuarter(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    borderRadius: '6px',
+                    color: '#f8fafc',
+                    fontSize: '0.75rem',
+                    padding: '6px 8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {EPA_DATA.map(d => (
+                    <option key={d.quarter} value={d.quarter} style={{ background: '#0f172a', color: '#f8fafc' }}>
+                      {d.label} — Paro: {d.unemploymentRate}%
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  id="epa-recalibrate-btn"
+                  onClick={() => resetPopulation(epaCalibration)}
+                  title="Regenerar la población de agentes con este trimestre EPA"
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: '1px solid #10b981',
+                    borderRadius: '6px',
+                    color: '#34d399',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '6px 10px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  ↺ Recalibrar
+                </button>
+              </div>
+
+              {/* PILARES EPA DEL TRIMESTRE ACTIVO */}
+              {epaCalibration && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Paro EPA</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ef4444' }}>
+                        {epaCalibration.unemploymentRate}%
+                      </div>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Asalariados</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8' }}>
+                        {epaCalibration.employedPct}%
+                      </div>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Públicos</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#a78bfa' }}>
+                        {epaCalibration.publicWorkerPct}%
+                      </div>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Sueldo Med.</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#34d399' }}>
+                        {epaCalibration.medianWage}€
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detalles complementarios: Brecha de género y sectores */}
+                  <div style={{
+                    background: 'rgba(0,0,0,0.25)',
+                    borderRadius: '6px',
+                    padding: '6px 8px',
+                    fontSize: '0.62rem',
+                    color: '#cbd5e1',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                  }}>
+                    <span>Brecha género: <strong style={{ color: '#f59e0b' }}>{epaCalibration.genderWageGap}%</strong></span>
+                    <span>Jubilados: <strong style={{ color: '#ec4899' }}>{epaCalibration.retiredPct}%</strong></span>
+                    <span>Autónomos: <strong style={{ color: '#f59e0b' }}>{epaCalibration.firmOwnerPct}%</strong></span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* 1. EXPEDIENTE CIUDADANO */}
             <div style={{
               background: 'rgba(255,255,255,0.03)',
@@ -875,6 +1044,315 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                     </div>
 
                   </div>
+                </div>
+
+                {/* MÁQUINA DEL TIEMPO DE LA DEUDA (1980–2024) */}
+                <div style={{
+                  background: 'rgba(56, 189, 248, 0.03)',
+                  border: '1px solid rgba(56, 189, 248, 0.2)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>⏰</span> Máquina del Tiempo de la Deuda Española (1980–2024)
+                      </h4>
+                      <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: '#94a3b8' }}>
+                        45 años de historia fiscal: desde el 17.8% del PIB en 1980 hasta el 105.1% actual.
+                        Fuentes: Banco de España & Eurostat PDE.
+                      </p>
+                    </div>
+                    <span className="badge text-xs" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                      {timelineYear} ({activeTimelineEntry?.govt || '—'})
+                    </span>
+                  </div>
+
+                  {/* GRÁFICO SVG INTERACTIVO */}
+                  {timelineSvg && (
+                    <div style={{
+                      position: 'relative',
+                      background: 'rgba(5, 12, 22, 0.8)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      padding: '8px 4px 4px',
+                      overflow: 'hidden'
+                    }}>
+                      <svg
+                        viewBox={`0 0 ${timelineSvg.w} ${timelineSvg.h}`}
+                        style={{ width: '100%', height: 'auto', display: 'block', userSelect: 'none' }}
+                      >
+                        <defs>
+                          <linearGradient id="debtAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.45" />
+                            <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
+
+                        {/* Rejilla horizontal y etiquetas Y */}
+                        {[0, 25, 50, 75, 100, 125].map(tick => {
+                          const y = timelineSvg.getY(tick);
+                          return (
+                            <g key={tick}>
+                              <line
+                                x1={timelineSvg.padL}
+                                y1={y}
+                                x2={timelineSvg.padL + timelineSvg.plotW}
+                                y2={y}
+                                stroke="rgba(255,255,255,0.06)"
+                                strokeWidth={1}
+                              />
+                              <text
+                                x={timelineSvg.padL - 6}
+                                y={y + 3}
+                                fontSize="9"
+                                fill="#64748b"
+                                textAnchor="end"
+                                fontFamily="monospace"
+                              >
+                                {tick}%
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* Línea Maastricht 60% */}
+                        {(() => {
+                          const y60 = timelineSvg.getY(60);
+                          return (
+                            <g>
+                              <line
+                                x1={timelineSvg.padL}
+                                y1={y60}
+                                x2={timelineSvg.padL + timelineSvg.plotW}
+                                y2={y60}
+                                stroke="#eab308"
+                                strokeDasharray="4 3"
+                                strokeWidth="1.2"
+                              />
+                              <text
+                                x={timelineSvg.padL + timelineSvg.plotW - 6}
+                                y={y60 - 4}
+                                fontSize="8.5"
+                                fill="#eab308"
+                                textAnchor="end"
+                                fontWeight="700"
+                              >
+                                Límite Maastricht (60%)
+                              </text>
+                            </g>
+                          );
+                        })()}
+
+                        {/* Área rellena */}
+                        <path d={timelineSvg.areaPath} fill="url(#debtAreaGrad)" />
+
+                        {/* Línea de deuda principal */}
+                        <path d={timelineSvg.linePath} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+                        {/* Marcas de años en el eje X */}
+                        {[1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015, 2020, 2024].map(yr => {
+                          const x = timelineSvg.getX(yr);
+                          return (
+                            <g key={yr}>
+                              <line
+                                x1={x}
+                                y1={timelineSvg.padT + timelineSvg.plotH}
+                                x2={x}
+                                y2={timelineSvg.padT + timelineSvg.plotH + 5}
+                                stroke="rgba(255,255,255,0.2)"
+                              />
+                              <text
+                                x={x}
+                                y={timelineSvg.padT + timelineSvg.plotH + 16}
+                                fontSize="9"
+                                fill="#94a3b8"
+                                textAnchor="middle"
+                                fontFamily="monospace"
+                              >
+                                {yr}
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* Puntos de hitos históricos (clickable) */}
+                        {timelineSvg.points.filter(p => p.event).map(p => (
+                          <circle
+                            key={p.year}
+                            cx={p.x}
+                            cy={p.y}
+                            r={p.year === timelineYear ? 5 : 3.5}
+                            fill={p.year === timelineYear ? '#38bdf8' : '#f59e0b'}
+                            stroke="#fff"
+                            strokeWidth={p.year === timelineYear ? 2 : 1}
+                            style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                            onClick={() => setTimelineYear(p.year)}
+                          >
+                            <title>{`${p.year}: ${p.event} (${p.debtPctGdp}% PIB)`}</title>
+                          </circle>
+                        ))}
+
+                        {/* Cursor / Línea vertical de año activo */}
+                        {timelineSvg.selectedPoint && (
+                          <g>
+                            <line
+                              x1={timelineSvg.selectedPoint.x}
+                              y1={timelineSvg.padT}
+                              x2={timelineSvg.selectedPoint.x}
+                              y2={timelineSvg.padT + timelineSvg.plotH}
+                              stroke="#38bdf8"
+                              strokeWidth="2"
+                              strokeDasharray="4 2"
+                            />
+                            {/* Círculo pulsante en el punto seleccionado */}
+                            <circle
+                              cx={timelineSvg.selectedPoint.x}
+                              cy={timelineSvg.selectedPoint.y}
+                              r="7"
+                              fill="rgba(56, 189, 248, 0.4)"
+                            />
+                            <circle
+                              cx={timelineSvg.selectedPoint.x}
+                              cy={timelineSvg.selectedPoint.y}
+                              r="4"
+                              fill="#38bdf8"
+                              stroke="#fff"
+                              strokeWidth="2"
+                            />
+                          </g>
+                        )}
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* CONTROL SLIDER DE AÑO */}
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>
+                        Desliza para viajar en el tiempo:
+                      </span>
+                      <span style={{ fontSize: '0.85rem', color: '#38bdf8', fontWeight: 800, fontFamily: 'monospace' }}>
+                        {timelineYear}
+                      </span>
+                    </div>
+                    <input
+                      id="debt-timeline-slider"
+                      type="range"
+                      min={1980}
+                      max={2024}
+                      value={timelineYear}
+                      onChange={e => setTimelineYear(Number(e.target.value))}
+                      style={{
+                        width: '100%',
+                        accentColor: '#38bdf8',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  </div>
+
+                  {/* BOTONES DE SALTO RÁPIDO A HITOS */}
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    {[
+                      { yr: 1982, label: '1982: PSOE' },
+                      { yr: 1986, label: '1986: CEE' },
+                      { yr: 1992, label: '1992: JJ.OO.' },
+                      { yr: 1999, label: '1999: Euro' },
+                      { yr: 2007, label: '2007: Mín. Boom (35.6%)' },
+                      { yr: 2012, label: '2012: Rescate (86.3%)' },
+                      { yr: 2020, label: '2020: COVID (120.3%)' },
+                      { yr: 2024, label: '2024: Hoy (105.1%)' },
+                    ].map(m => (
+                      <button
+                        key={m.yr}
+                        onClick={() => setTimelineYear(m.yr)}
+                        style={{
+                          background: timelineYear === m.yr ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.04)',
+                          color: timelineYear === m.yr ? '#38bdf8' : '#94a3b8',
+                          border: timelineYear === m.yr ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '6px',
+                          padding: '4px 8px',
+                          fontSize: '0.62rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* TARJETA DE DETALLE DEL AÑO SELECCIONADO */}
+                  {activeTimelineEntry && (
+                    <div style={{
+                      marginTop: '12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f8fafc' }}>
+                          📅 Año {activeTimelineEntry.year} · Gobierno: <span style={{ color: '#38bdf8' }}>{activeTimelineEntry.govt}</span>
+                        </span>
+                        <span style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: activeTimelineEntry.debtPctGdp > 100 ? 'rgba(239, 68, 68, 0.2)' : activeTimelineEntry.debtPctGdp > 60 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(52, 211, 153, 0.2)',
+                          color: activeTimelineEntry.debtPctGdp > 100 ? '#ef4444' : activeTimelineEntry.debtPctGdp > 60 ? '#f59e0b' : '#34d399',
+                          border: `1px solid ${activeTimelineEntry.debtPctGdp > 100 ? '#ef4444' : activeTimelineEntry.debtPctGdp > 60 ? '#f59e0b' : '#34d399'}44`,
+                        }}>
+                          {activeTimelineEntry.debtPctGdp > 100 ? '🚨 Alerta Máxima' : activeTimelineEntry.debtPctGdp > 60 ? '⚠️ Supera Maastricht' : '✅ En Límites UE'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                        <div style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>Deuda / PIB</div>
+                          <div style={{
+                            fontSize: '1.05rem',
+                            fontWeight: 900,
+                            color: activeTimelineEntry.debtPctGdp > 100 ? '#ef4444' : activeTimelineEntry.debtPctGdp > 60 ? '#f59e0b' : '#34d399'
+                          }}>
+                            {activeTimelineEntry.debtPctGdp}%
+                          </div>
+                        </div>
+                        <div style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>Deuda Absoluta</div>
+                          <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#f1f5f9' }}>
+                            {activeTimelineEntry.debtBn} B€
+                          </div>
+                        </div>
+                        <div style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>Tipo Bono 10Y</div>
+                          <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#a78bfa' }}>
+                            {activeTimelineEntry.interestRate}%
+                          </div>
+                        </div>
+                      </div>
+
+                      {activeTimelineEntry.event && (
+                        <div style={{
+                          background: 'rgba(245, 158, 11, 0.08)',
+                          borderLeft: '3px solid #f59e0b',
+                          borderRadius: '4px',
+                          padding: '8px 10px',
+                          fontSize: '0.72rem',
+                          color: '#fef3c7',
+                          lineHeight: 1.4,
+                        }}>
+                          <strong>Hito Histórico:</strong> {activeTimelineEntry.event}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
               </div>

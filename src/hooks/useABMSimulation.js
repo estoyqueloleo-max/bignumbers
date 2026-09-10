@@ -13,9 +13,17 @@ import {
   aggregateABMMacro
 } from '../utils/abmEngine';
 
-export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed = 1) {
+export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed = 1, epaCalibration = null, abmCalibration = {}) {
   const [agentCount] = useState(2500);
-  const [abmState, setAbmState] = useState(() => createABMPopulation(agentCount, gameState || {}));
+
+  const epaRef = useRef(epaCalibration);
+  epaRef.current = epaCalibration;
+  const abmCalibRef = useRef(abmCalibration);
+  abmCalibRef.current = abmCalibration;
+
+  const [abmState, setAbmState] = useState(() =>
+    createABMPopulation(agentCount, gameState || {}, abmCalibration || {}, epaCalibration)
+  );
   const [isSimRunning, setIsSimRunning] = useState(false);
   const [activeShock, setActiveShock] = useState(null);
   const [selectedAgentId, setSelectedAgentId] = useState(null);
@@ -28,16 +36,23 @@ export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed =
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
 
-  // Re-calibrar si cambia drásticamente el año de datos reales
+  // Re-calibrar si cambia el año de datos reales o el trimestre EPA seleccionado
   const lastLoadedYearRef = useRef(gameState?.realDataYear);
+  const lastEpaQuarterRef = useRef(epaCalibration?.quarter);
   useEffect(() => {
-    if (gameState?.realDataYear && gameState.realDataYear !== lastLoadedYearRef.current) {
-      lastLoadedYearRef.current = gameState.realDataYear;
-      const fresh = createABMPopulation(agentCount, gameState);
+    const yearChanged = gameState?.realDataYear && gameState.realDataYear !== lastLoadedYearRef.current;
+    const epaQuarter = epaCalibration?.quarter;
+    const epaChanged = epaQuarter !== undefined && epaQuarter !== lastEpaQuarterRef.current;
+
+    if (yearChanged || epaChanged) {
+      lastLoadedYearRef.current = gameState?.realDataYear;
+      lastEpaQuarterRef.current = epaQuarter;
+      const fresh = createABMPopulation(agentCount, gameState || {}, abmCalibRef.current || {}, epaCalibration);
       setAbmState(fresh);
+      setSelectedAgentId(null);
       setStepCount(1);
     }
-  }, [gameState?.realDataYear, agentCount, gameState]);
+  }, [gameState?.realDataYear, epaCalibration, agentCount, gameState]);
 
   // Avanzar un paso de simulación (1 mes)
   const step = useCallback((forcedShock = null) => {
@@ -80,8 +95,9 @@ export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed =
   }, [step]);
 
   // Reiniciar la población
-  const resetPopulation = useCallback(() => {
-    const fresh = createABMPopulation(agentCount, gameStateRef.current || {});
+  const resetPopulation = useCallback((customEpa = null) => {
+    const epa = customEpa !== null ? customEpa : epaRef.current;
+    const fresh = createABMPopulation(agentCount, gameStateRef.current || {}, abmCalibRef.current || {}, epa);
     setAbmState(fresh);
     setSelectedAgentId(null);
     setActiveShock(null);
