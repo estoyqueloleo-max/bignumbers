@@ -111,7 +111,115 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
     return { w, h, padL, padR, padT, padB, plotW, plotH, points, linePath, areaPath, selectedPoint, getX, getY };
   }, [timelineYear]);
 
-  // Render loop continuo a 60fps en Canvas para partículas y movimiento de agentes
+  // ─── CALCULADORA "RUTA AL 30%" ────────────────────────────────────────────────
+  // Palancas de ingresos
+  const [leverSumergida, setLeverSumergida] = useState(0);   // puntos % aflorados (0-5)
+  const [leverSociedades, setLeverSociedades] = useState(0);  // puntos % tipo efectivo subido (0-8)
+  const [leverCrecimiento, setLeverCrecimiento] = useState(2); // % crecimiento PIB nominal anual (1-7)
+  const [leverIed, setLeverIed] = useState(0);                // % IED adicional sobre PIB (0-3)
+  const [leverAutonomos, setLeverAutonomos] = useState(0);    // % de autónomos formalizados (0-50)
+  // Palancas de gasto (mezcla)
+  const [leverGasto, setLeverGasto] = useState(0);           // % recorte gasto no esencial (0-15)
+  const [leverEficiencia, setLeverEficiencia] = useState(0); // % eficiencia administrativa (0-10)
+
+  // Trayectoria de deuda a 30 años (2024-2054)
+  const debtTrajectory = useMemo(() => {
+    // ── Parámetros base 2024 ────────────────────────────────────────────
+    const BASE_DEBT_PCT   = 105.1;   // % PIB
+    const BASE_PIB_BN     = 1540;    // B€ (PIB 2024 est.)
+    const BASE_REVENUE_BN = 490;     // B€ ingresos tributarios
+    const BASE_SPENDING_BN = 540;    // B€ gasto (incl. intereses)
+    const BASE_INTEREST_BN = 33;     // B€ intereses deuda (≈2% de 1.640 B€)
+    const BASE_INTEREST_RATE = 0.032; // tipo medio bono soberano largo plazo
+    const YEARS = 30;
+
+    // ── Efecto de cada palanca en ingresos adicionales anuales ───────────
+    const extraRevenueBn =
+      leverSumergida  * 2.0 +     // 2.000 M€ / punto % aflorado
+      leverSociedades * 1.5 +     // 1.500 M€ / punto % tipo efectivo IS
+      leverIed        * 1.5 +     // 1.500 M€ / punto % IED adicional
+      leverAutonomos  * 0.06;     // hasta 3.000 M€ al 50% → 60 M€/punto%
+
+    // ── Efecto de las palancas de gasto ──────────────────────────────────
+    const savingsBn =
+      leverGasto      * (BASE_SPENDING_BN - BASE_INTEREST_BN) * 0.01 + // % del gasto no-intereses
+      leverEficiencia * (BASE_SPENDING_BN - BASE_INTEREST_BN) * 0.01;
+
+    // ── Crecimiento nominal del PIB (palanca más potente) ────────────────
+    const gNominal = leverCrecimiento / 100;
+
+    // ── Calcular año a año ───────────────────────────────────────────────
+    const trajectory  = [];
+    const trajectoryBase = []; // sin palancas (escenario inmovilismo)
+
+    let debtBn    = BASE_PIB_BN * (BASE_DEBT_PCT / 100);
+    let pib       = BASE_PIB_BN;
+    let revenue   = BASE_REVENUE_BN;
+    let debtBnBase = debtBn;
+    let pibBase   = BASE_PIB_BN;
+
+    for (let y = 0; y <= YEARS; y++) {
+      const year = 2024 + y;
+      const debtPct = (debtBn / pib) * 100;
+      const debtPctBase = (debtBnBase / pibBase) * 100;
+      trajectory.push({ year, debtPct: Math.max(0, debtPct), debtBn: Math.round(debtBn) });
+      trajectoryBase.push({ year, debtPct: Math.max(0, debtPctBase) });
+
+      // ── Escenario con palancas activas ───────────────────────────────
+      const interestCost = debtBn * BASE_INTEREST_RATE;
+      const totalRevenue = revenue + extraRevenueBn;
+      const totalSpending = BASE_SPENDING_BN - savingsBn;
+      const primaryBalance = totalRevenue - (totalSpending - interestCost); // excluye intereses del gasto
+      const deficit = totalSpending - totalRevenue; // positivo = déficit
+
+      // Dinámica de deuda: d(t+1) = d(t) + déficit
+      debtBn = Math.max(0, debtBn + deficit);
+      pib = pib * (1 + gNominal);
+      revenue = revenue * (1 + gNominal * 0.85); // recaudación crece algo menos que el PIB
+
+      // ── Escenario base sin palancas (crecimiento 2%, déficit actual) ──
+      const baseDeficit = BASE_SPENDING_BN - BASE_REVENUE_BN; // ~50 B€ déficit
+      debtBnBase = Math.max(0, debtBnBase + baseDeficit);
+      pibBase = pibBase * 1.02; // 2% crecimiento base
+    }
+
+    // ── Años hasta alcanzar umbrales ─────────────────────────────────────
+    const find60 = trajectory.find(p => p.debtPct <= 60);
+    const find30 = trajectory.find(p => p.debtPct <= 30);
+    const base60 = trajectoryBase.find(p => p.debtPct <= 60);
+
+    // Intereses totales pagados acumulados (simplificado)
+    const totalInterestPaid = Math.round(trajectory.reduce((acc, p, i) => {
+      if (i === 0) return acc;
+      return acc + p.debtBn * BASE_INTEREST_RATE;
+    }, 0));
+
+    return { trajectory, trajectoryBase, find60, find30, base60, totalInterestPaid, extraRevenueBn, savingsBn };
+  }, [leverSumergida, leverSociedades, leverCrecimiento, leverIed, leverAutonomos, leverGasto, leverEficiencia]);
+
+  // SVG de trayectoria (línea proyectada 2024-2054)
+  const trajectorySvg = useMemo(() => {
+    const { trajectory, trajectoryBase } = debtTrajectory;
+    const w = 680; const h = 180;
+    const padL = 40; const padR = 16; const padT = 16; const padB = 30;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const minYear = 2024; const maxYear = 2054;
+    const maxD = 130;
+    const getX = yr => padL + ((yr - minYear) / (maxYear - minYear)) * plotW;
+    const getY = d  => (padT + plotH) - (Math.min(maxD, Math.max(0, d)) / maxD) * plotH;
+
+    const toPath = (pts) => pts.reduce((acc, p, i) =>
+      `${acc} ${i === 0 ? 'M' : 'L'} ${getX(p.year).toFixed(1)} ${getY(p.debtPct).toFixed(1)}`, '');
+
+    const lineActive = toPath(trajectory);
+    const lineBase   = toPath(trajectoryBase);
+    const areaPath   = `${lineActive} L ${getX(2054).toFixed(1)} ${(padT + plotH).toFixed(1)} L ${getX(2024).toFixed(1)} ${(padT + plotH).toFixed(1)} Z`;
+
+    return { w, h, padL, padR, padT, padB, plotW, plotH, getX, getY, lineActive, lineBase, areaPath };
+  }, [debtTrajectory]);
+
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1353,6 +1461,295 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* ─── RUTA AL 30%: CALCULADORA INTERACTIVA ────────────────────────── */}
+                <div style={{
+                  background: 'rgba(52, 211, 153, 0.03)',
+                  border: '1px solid rgba(52, 211, 153, 0.22)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                }}>
+                  {/* CABECERA */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <h4 style={{ margin: '0 0 4px', fontSize: '0.9rem', fontWeight: 800, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>🌱</span> Ruta al 30%: ¿Cómo bajar la deuda sin hundir el país?
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                      Calibra las palancas de <strong style={{ color: '#34d399' }}>ingresos</strong> y <strong style={{ color: '#f97316' }}>gasto</strong> para proyectar cómo evoluciona la Deuda/PIB hasta 2054.
+                      Históricamente España bajó del 67% al 36% (1996-2007) <em>creciendo</em>, no recortando.
+                    </p>
+                  </div>
+
+                  {/* SLIDERS EN DOS COLUMNAS */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+
+                    {/* COLUMNA IZQUIERDA — PALANCAS DE INGRESOS */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#34d399', borderBottom: '1px solid rgba(52,211,153,0.2)', paddingBottom: '4px' }}>
+                        📈 Palancas de Ingresos
+                      </div>
+
+                      {[
+                        { label: '💼 Aflorar economía sumergida', sub: `+${(leverSumergida * 2).toFixed(0)} B€/año en IRPF+IVA+SS`, val: leverSumergida, set: setLeverSumergida, min: 0, max: 5, step: 0.5, unit: 'pp', color: '#34d399' },
+                        { label: '🏢 Tipo efectivo IS (hoy ~17%)', sub: `+${(leverSociedades * 1.5).toFixed(0)} B€/año en recaudación`, val: leverSociedades, set: setLeverSociedades, min: 0, max: 8, step: 0.5, unit: 'pp', color: '#34d399' },
+                        { label: '📈 Crecimiento PIB nominal', sub: `${leverCrecimiento}% anual (boom 1996-2007: 7-8%)`, val: leverCrecimiento, set: setLeverCrecimiento, min: 1, max: 7, step: 0.5, unit: '%', color: '#38bdf8' },
+                        { label: '🌍 IED adicional (% sobre PIB)', sub: `+${(leverIed * 1.5).toFixed(0)} B€/año est.`, val: leverIed, set: setLeverIed, min: 0, max: 3, step: 0.25, unit: '%', color: '#34d399' },
+                        { label: '🧑‍💻 Formalización autónomos', sub: `+${(leverAutonomos * 0.06).toFixed(1)} B€/año en SS e IRPF`, val: leverAutonomos, set: setLeverAutonomos, min: 0, max: 50, step: 5, unit: '%', color: '#34d399' },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span style={{ fontSize: '0.64rem', color: '#e2e8f0', fontWeight: 600 }}>{s.label}</span>
+                            <span style={{ fontSize: '0.64rem', color: s.color, fontWeight: 800, fontFamily: 'monospace' }}>
+                              {s.val}{s.unit}
+                            </span>
+                          </div>
+                          <input type="range" min={s.min} max={s.max} step={s.step} value={s.val}
+                            onChange={e => s.set(Number(e.target.value))}
+                            style={{ width: '100%', accentColor: s.color, cursor: 'pointer', height: '14px' }}
+                          />
+                          <div style={{ fontSize: '0.58rem', color: '#64748b' }}>{s.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* COLUMNA DERECHA — PALANCAS DE GASTO */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#f97316', borderBottom: '1px solid rgba(249,115,22,0.2)', paddingBottom: '4px' }}>
+                        ✂️ Palancas de Gasto (Mezcla Opcional)
+                      </div>
+
+                      {[
+                        { label: '📉 Reducción gasto no esencial', sub: `−${(leverGasto * (540 - 33) * 0.01).toFixed(0)} B€/año (excl. intereses)`, val: leverGasto, set: setLeverGasto, min: 0, max: 15, step: 0.5, unit: '%', color: '#f97316' },
+                        { label: '⚙️ Eficiencia administrativa', sub: `−${(leverEficiencia * (540 - 33) * 0.01).toFixed(0)} B€/año sin recortar servicios`, val: leverEficiencia, set: setLeverEficiencia, min: 0, max: 10, step: 0.5, unit: '%', color: '#f59e0b' },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span style={{ fontSize: '0.64rem', color: '#e2e8f0', fontWeight: 600 }}>{s.label}</span>
+                            <span style={{ fontSize: '0.64rem', color: s.color, fontWeight: 800, fontFamily: 'monospace' }}>
+                              {s.val}{s.unit}
+                            </span>
+                          </div>
+                          <input type="range" min={s.min} max={s.max} step={s.step} value={s.val}
+                            onChange={e => s.set(Number(e.target.value))}
+                            style={{ width: '100%', accentColor: s.color, cursor: 'pointer', height: '14px' }}
+                          />
+                          <div style={{ fontSize: '0.58rem', color: '#64748b' }}>{s.sub}</div>
+                        </div>
+                      ))}
+
+                      {/* Resumen de impacto combinado */}
+                      <div style={{
+                        marginTop: '6px',
+                        background: 'rgba(0,0,0,0.3)',
+                        borderRadius: '8px',
+                        padding: '10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px',
+                      }}>
+                        <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '4px', marginBottom: '2px' }}>
+                          💡 Efecto Anual Estimado
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem' }}>
+                          <span style={{ color: '#94a3b8' }}>Ingresos extra:</span>
+                          <span style={{ color: '#34d399', fontWeight: 800, fontFamily: 'monospace' }}>
+                            +{debtTrajectory.extraRevenueBn.toFixed(1)} B€/año
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem' }}>
+                          <span style={{ color: '#94a3b8' }}>Ahorro en gasto:</span>
+                          <span style={{ color: '#f97316', fontWeight: 800, fontFamily: 'monospace' }}>
+                            −{debtTrajectory.savingsBn.toFixed(1)} B€/año
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '4px', marginTop: '2px' }}>
+                          <span style={{ color: '#94a3b8' }}>Mejora fiscal neta:</span>
+                          <span style={{ color: '#f1f5f9', fontWeight: 900, fontFamily: 'monospace' }}>
+                            {(debtTrajectory.extraRevenueBn + debtTrajectory.savingsBn).toFixed(1)} B€/año
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Botón reset */}
+                      <button
+                        id="ruta30-reset-btn"
+                        onClick={() => {
+                          setLeverSumergida(0); setLeverSociedades(0); setLeverCrecimiento(2);
+                          setLeverIed(0); setLeverAutonomos(0); setLeverGasto(0); setLeverEficiencia(0);
+                        }}
+                        style={{
+                          background: 'rgba(255,255,255,0.04)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '6px',
+                          color: '#64748b',
+                          fontSize: '0.65rem',
+                          padding: '6px 10px',
+                          cursor: 'pointer',
+                          marginTop: '4px',
+                        }}
+                      >
+                        ↺ Resetear todo
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* GRÁFICO SVG DE TRAYECTORIA 2024–2054 */}
+                  <div style={{
+                    background: 'rgba(5, 12, 22, 0.85)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    padding: '8px 4px 4px',
+                    overflow: 'hidden',
+                    marginBottom: '12px',
+                  }}>
+                    <svg
+                      viewBox={`0 0 ${trajectorySvg.w} ${trajectorySvg.h}`}
+                      style={{ width: '100%', height: 'auto', display: 'block' }}
+                    >
+                      <defs>
+                        <linearGradient id="trajGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#34d399" stopOpacity="0.35" />
+                          <stop offset="100%" stopColor="#34d399" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Rejilla Y */}
+                      {[0, 30, 60, 90, 120].map(tick => {
+                        const y = trajectorySvg.getY(tick);
+                        const isKey = tick === 60 || tick === 30;
+                        return (
+                          <g key={tick}>
+                            <line x1={trajectorySvg.padL} y1={y} x2={trajectorySvg.padL + trajectorySvg.plotW} y2={y}
+                              stroke={isKey ? (tick === 30 ? 'rgba(52,211,153,0.3)' : 'rgba(234,179,8,0.3)') : 'rgba(255,255,255,0.05)'}
+                              strokeWidth={isKey ? 1.5 : 1} strokeDasharray={isKey ? '4 3' : 'none'} />
+                            <text x={trajectorySvg.padL - 5} y={y + 3} fontSize="9" fill={isKey ? (tick === 30 ? '#34d399' : '#eab308') : '#475569'} textAnchor="end" fontFamily="monospace">
+                              {tick}%
+                            </text>
+                          </g>
+                        );
+                      })}
+
+                      {/* Etiquetas objetivo */}
+                      <text x={trajectorySvg.padL + trajectorySvg.plotW - 6} y={trajectorySvg.getY(60) - 4} fontSize="8.5" fill="#eab308" textAnchor="end" fontWeight="700">Maastricht (60%)</text>
+                      <text x={trajectorySvg.padL + trajectorySvg.plotW - 6} y={trajectorySvg.getY(30) - 4} fontSize="8.5" fill="#34d399" textAnchor="end" fontWeight="700">🎯 Objetivo 1980 (30%)</text>
+
+                      {/* Eje X — años */}
+                      {[2024, 2030, 2035, 2040, 2045, 2050, 2054].map(yr => {
+                        const x = trajectorySvg.getX(yr);
+                        return (
+                          <g key={yr}>
+                            <line x1={x} y1={trajectorySvg.padT + trajectorySvg.plotH} x2={x} y2={trajectorySvg.padT + trajectorySvg.plotH + 5} stroke="rgba(255,255,255,0.15)" />
+                            <text x={x} y={trajectorySvg.padT + trajectorySvg.plotH + 16} fontSize="9" fill="#64748b" textAnchor="middle" fontFamily="monospace">{yr}</text>
+                          </g>
+                        );
+                      })}
+
+                      {/* Línea base (escenario sin palancas — rojo) */}
+                      <path d={trajectorySvg.lineBase} fill="none" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.6" />
+
+                      {/* Área y línea activa (escenario con palancas — verde) */}
+                      <path d={trajectorySvg.areaPath} fill="url(#trajGrad)" />
+                      <path d={trajectorySvg.lineActive} fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+                      {/* Punto 2024 (inicio) */}
+                      <circle cx={trajectorySvg.getX(2024)} cy={trajectorySvg.getY(105.1)} r="4" fill="#f59e0b" stroke="#fff" strokeWidth="1.5" />
+
+                      {/* Punto de cruce Maastricht (si existe) */}
+                      {debtTrajectory.find60 && (
+                        <circle cx={trajectorySvg.getX(debtTrajectory.find60.year)} cy={trajectorySvg.getY(60)} r="4.5" fill="#eab308" stroke="#fff" strokeWidth="1.5">
+                          <title>{`${debtTrajectory.find60.year}: cruza el 60% de Maastricht`}</title>
+                        </circle>
+                      )}
+                      {/* Punto de cruce 30% (si existe) */}
+                      {debtTrajectory.find30 && (
+                        <circle cx={trajectorySvg.getX(debtTrajectory.find30.year)} cy={trajectorySvg.getY(30)} r="5" fill="#34d399" stroke="#fff" strokeWidth="2">
+                          <title>{`${debtTrajectory.find30.year}: cruza el 30% objetivo`}</title>
+                        </circle>
+                      )}
+                    </svg>
+                    {/* Leyenda */}
+                    <div style={{ display: 'flex', gap: '14px', padding: '4px 8px 2px', fontSize: '0.6rem', color: '#64748b' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: 16, height: 2, background: '#34d399', display: 'inline-block', borderRadius: 2 }}></span>
+                        Tu escenario
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: 16, height: 2, background: '#ef4444', display: 'inline-block', borderRadius: 2, opacity: 0.6 }}></span>
+                        Sin cambios (inmovilismo)
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: 8, height: 8, background: '#f59e0b', display: 'inline-block', borderRadius: '50%' }}></span>
+                        Hoy (105.1% PIB)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* TARJETAS DE RESULTADO */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    <div style={{
+                      background: debtTrajectory.find60 ? 'rgba(234,179,8,0.08)' : 'rgba(239,68,68,0.06)',
+                      border: `1px solid ${debtTrajectory.find60 ? '#eab308' : '#ef4444'}44`,
+                      borderRadius: '8px', padding: '10px', textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>🎯 Alcanzar Maastricht (60%)</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: debtTrajectory.find60 ? '#eab308' : '#ef4444' }}>
+                        {debtTrajectory.find60 ? `${debtTrajectory.find60.year - 2024} años` : '> 30 años'}
+                      </div>
+                      <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
+                        {debtTrajectory.find60 ? `En ${debtTrajectory.find60.year}` : 'No alcanzable sin cambios'}
+                      </div>
+                      {debtTrajectory.base60 && debtTrajectory.find60 && (
+                        <div style={{ fontSize: '0.56rem', color: '#34d399', marginTop: '2px' }}>
+                          {debtTrajectory.base60.year - debtTrajectory.find60.year > 0
+                            ? `${debtTrajectory.base60.year - debtTrajectory.find60.year} años antes que sin palancas`
+                            : ''}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{
+                      background: debtTrajectory.find30 ? 'rgba(52,211,153,0.08)' : 'rgba(100,116,139,0.08)',
+                      border: `1px solid ${debtTrajectory.find30 ? '#34d399' : '#475569'}44`,
+                      borderRadius: '8px', padding: '10px', textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>🏆 Objetivo 30% (nivel 1980)</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: debtTrajectory.find30 ? '#34d399' : '#475569' }}>
+                        {debtTrajectory.find30 ? `${debtTrajectory.find30.year - 2024} años` : '> 30 años'}
+                      </div>
+                      <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
+                        {debtTrajectory.find30 ? `En ${debtTrajectory.find30.year}` : 'Fuera del horizonte'}
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(167,139,250,0.06)',
+                      border: '1px solid rgba(167,139,250,0.2)',
+                      borderRadius: '8px', padding: '10px', textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>💸 Intereses pagados (30 años)</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#a78bfa' }}>
+                        {debtTrajectory.totalInterestPaid.toFixed(0)} B€
+                      </div>
+                      <div style={{ fontSize: '0.58rem', color: '#64748b' }}>Coste acumulado deuda</div>
+                    </div>
+                  </div>
+
+                  {/* NOTA EDUCATIVA */}
+                  <div style={{
+                    marginTop: '10px',
+                    background: 'rgba(52, 211, 153, 0.06)',
+                    borderLeft: '3px solid #34d399',
+                    borderRadius: '4px',
+                    padding: '8px 10px',
+                    fontSize: '0.64rem',
+                    color: '#a7f3d0',
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>📌 Clave:</strong> El 80% de la reducción histórica de deuda/PIB en España (1996-2007) fue por el denominador
+                    (crecimiento del PIB), no por el numerador (amortización). La diferencia entre el tipo de interés y el crecimiento
+                    (spread r−g) es el factor crítico: cuando g &gt; r, la deuda/PIB cae sola aunque haya déficit moderado.
+                  </div>
                 </div>
 
               </div>
