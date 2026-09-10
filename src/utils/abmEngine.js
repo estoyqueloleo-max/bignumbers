@@ -51,18 +51,44 @@ export function getRandomName() {
  * Crea una población de agentes calibrada con la estructura demográfica española.
  * @param {number} count - Número de agentes a generar (ej. 2500)
  * @param {object} baseConfig - Configuración base del estado del juego
+ * @param {object} abmCalibration - Calibración salarial real por sub-cohort (de getDebtLabData)
  */
-export function createABMPopulation(count = 2500, baseConfig = {}) {
-  const baseIncome = baseConfig.baseIncomePerCapita || 1800; // Salario base medio mensual
+export function createABMPopulation(count = 2500, baseConfig = {}, abmCalibration = {}) {
+  const baseIncome = baseConfig.baseIncomePerCapita || 1800;
   const targetUnempRate = (baseConfig.unemploymentRate !== undefined ? baseConfig.unemploymentRate : 14.0) / 100;
 
-  // Proporciones objetivo
+  // Salarios reales por sub-cohort de funcionario (fallback a valores 2019)
+  const wageCalib = {
+    health:    abmCalibration.health    || 2010,
+    education: abmCalibration.education || 2060,
+    defense:   abmCalibration.defense   || 2220,
+    admin:     abmCalibration.admin     || 2080,
+    justice:   abmCalibration.justice   || 2760,
+  };
+
+  // Proporciones objetivo de sub-cohorts públicos (por función, proporcionales al empleo real)
+  // Educación 32%, Sanidad 26%, Admin 21%, Defensa 9%, Justicia 7%, Otros 5%
+  const PUBLIC_WORKER_SUBCOHORTS = [
+    { key: 'education_worker', label: 'Docente', weight: 0.32, income: wageCalib.education },
+    { key: 'health_worker',    label: 'Sanitario',  weight: 0.26, income: wageCalib.health },
+    { key: 'admin_worker',     label: 'Funcionario AAPP', weight: 0.21, income: wageCalib.admin },
+    { key: 'defense_worker',   label: 'Defensa/Seguridad', weight: 0.09, income: wageCalib.defense },
+    { key: 'justice_worker',   label: 'Justicia',  weight: 0.07, income: wageCalib.justice },
+    { key: 'public_worker',    label: 'Empleado Público', weight: 0.05, income: wageCalib.admin }, // Resto AAPP
+  ];
+
+  // Construir tabla de umbrales acumulados para sub-cohorts públicos
+  let cumulativePublicWeight = 0;
+  const publicCohortThresholds = PUBLIC_WORKER_SUBCOHORTS.map(sc => {
+    cumulativePublicWeight += sc.weight;
+    return { ...sc, cumWeight: cumulativePublicWeight };
+  });
+
   const pctRetired = 0.22;
-  const pctPublicWorker = 0.08;
+  const pctPublicWorker = 0.08; // ~8% de la población activa
   const pctFirmOwner = 0.12;
   const pctActivePrivate = 1 - (pctRetired + pctPublicWorker + pctFirmOwner); // ~0.58
   const pctUnemployed = pctActivePrivate * targetUnempRate;
-  const pctEmployed = pctActivePrivate - pctUnemployed;
 
   const agents = [];
   const firms = [];
@@ -71,6 +97,7 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
   for (let i = 0; i < count; i++) {
     const roll = Math.random();
     let cohort;
+    let subLabel = null;
     let age;
     let income = 0;
     let savings = Math.floor(500 + Math.random() * 15000);
@@ -81,9 +108,14 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
       income = Math.floor(baseIncome * (0.55 + Math.random() * 0.45)); // Pensión media: 1.000€ - 1.800€
       savings = Math.floor(3000 + Math.random() * 25000);
     } else if (roll < pctRetired + pctPublicWorker) {
-      cohort = 'public_worker';
+      // Sub-cohort de funcionario (por peso relativo real)
+      const rollPublic = Math.random();
+      const sc = publicCohortThresholds.find(t => rollPublic <= t.cumWeight)
+        || PUBLIC_WORKER_SUBCOHORTS[PUBLIC_WORKER_SUBCOHORTS.length - 1];
+      cohort = sc.key;
+      subLabel = sc.label;
       age = Math.floor(25 + Math.random() * 38);
-      income = Math.floor(baseIncome * (0.9 + Math.random() * 0.5)); // Funcionario: 1.600€ - 2.500€
+      income = Math.floor(sc.income * (0.85 + Math.random() * 0.35)); // Variación salarial real ±20%
     } else if (roll < pctRetired + pctPublicWorker + pctFirmOwner) {
       cohort = 'firm_owner';
       age = Math.floor(30 + Math.random() * 32);
@@ -100,24 +132,18 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
       income = Math.floor(baseIncome * (0.7 + Math.random() * 0.6)); // Salario asalariado
     }
 
-    // Ubicación espacial en cuadrícula urbana (4 distritos)
-    let district;
-    let baseX, baseY;
+    // Ubicación espacial por distrito
+    let district, baseX, baseY;
     if (cohort === 'retired') {
-      district = 'Residencial / Parques';
-      baseX = 200; baseY = 150;
+      district = 'Residencial / Parques'; baseX = 200; baseY = 150;
     } else if (cohort === 'employed' || cohort === 'unemployed') {
-      district = 'Barrio Obrero / Servicios';
-      baseX = 200; baseY = 350;
+      district = 'Barrio Obrero / Servicios'; baseX = 200; baseY = 350;
     } else if (cohort === 'firm_owner') {
-      district = 'Polígono Industrial & Comercios';
-      baseX = 600; baseY = 150;
+      district = 'Polígono Industrial & Comercios'; baseX = 600; baseY = 150;
     } else {
-      district = 'Distrito Administrativo & Salud';
-      baseX = 600; baseY = 350;
+      // Todos los funcionarios → Distrito Administrativo & Salud
+      district = 'Distrito Administrativo & Salud'; baseX = 600; baseY = 350;
     }
-
-    // Coordenadas con dispersión
     const x = Math.max(30, Math.min(770, baseX + (Math.random() - 0.5) * 280));
     const y = Math.max(30, Math.min(470, baseY + (Math.random() - 0.5) * 200));
 
@@ -125,6 +151,7 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
       id: i + 1,
       name: getRandomName(),
       cohort,
+      subLabel, // Especialidad del funcionario (null si no es funcionario)
       age,
       income,
       baseIncome: income,
@@ -132,7 +159,7 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
       consumption: 0,
       taxPaid: 0,
       vatPaid: 0,
-      satisfaction: Math.floor(65 + Math.random() * 30), // 0 a 100
+      satisfaction: Math.floor(65 + Math.random() * 30),
       isProtesting: false,
       health: Math.floor(75 + Math.random() * 25),
       monthsUnemployed: cohort === 'unemployed' ? Math.floor(1 + Math.random() * 10) : 0,
@@ -143,6 +170,7 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
       vx: (Math.random() - 0.5) * 0.8,
       vy: (Math.random() - 0.5) * 0.8,
     };
+
 
     agents.push(agent);
 
@@ -162,7 +190,7 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
     }
   }
 
-  // 2. Asignar trabajadores a empresas
+  // Asignar trabajadores a empresas
   const firmCount = firms.length;
   if (firmCount > 0) {
     agents.forEach(a => {
@@ -177,12 +205,24 @@ export function createABMPopulation(count = 2500, baseConfig = {}) {
   return { agents, firms };
 }
 
+// ─── Constante: cohorts que son empleados públicos ───────────────────────────
+export const PUBLIC_COHORT_KEYS = [
+  'public_worker', 'health_worker', 'education_worker',
+  'defense_worker', 'admin_worker', 'justice_worker',
+];
+
 // ─── Paso de Simulación Micro (Tick Mensual) ──────────────────────────────────
 
 /**
  * Ejecuta un mes de simulación en el micro-mundo de agentes.
  * @param {object} abmState - { agents, firms }
  * @param {object} params - { taxRate, ministryAllocations, inflationRate, shock }
+ *
+ * Shocks disponibles:
+ *   'austerity'        → Recorte 25% pensiones, consumo -15%
+ *   'stimulus'         → Bono de consumo +25%
+ *   'lockdown'         → Confinamiento: consumo -35%
+ *   'extreme_austerity'→ "Pagar la deuda en 1 año": recorte 80% de todo excepto intereses
  */
 export function stepABMSimulation(abmState, params = {}) {
   const { agents, firms } = abmState;
@@ -200,46 +240,42 @@ export function stepABMSimulation(abmState, params = {}) {
     firmMap.set(f.id, f);
   });
 
-  // Factor de escala de choque
-  let shockConsumptionFactor = 1.0;
-  let shockPensionFactor = 1.0;
-  if (shock === 'austerity') {
-    shockPensionFactor = 0.75; // Recorte del 25% en pensiones
-    shockConsumptionFactor = 0.85;
-  } else if (shock === 'stimulus') {
-    shockConsumptionFactor = 1.25; // Bono de consumo
-  } else if (shock === 'lockdown') {
-    shockConsumptionFactor = 0.65; // Confinamiento: consumo se desploma
-  }
+  const shockConsumptionFactor = shock === 'austerity'         ? 0.85
+    : shock === 'stimulus'          ? 1.25
+    : shock === 'lockdown'          ? 0.65
+    : shock === 'extreme_austerity' ? 0.40  // Todo congelado: solo subsistencia
+    : 1.0;
+  const shockPensionFactor    = shock === 'austerity'         ? 0.75
+    : shock === 'extreme_austerity' ? 0.30  // Pensiones recortadas al mínimo vital
+    : 1.0;
+  const shockPublicWageFactor = shock === 'extreme_austerity' ? 0.20  // Sólo se paga el mínimo funcional
+    : 1.0;
 
   // ─── FASE 1: INGRESOS E IMPUESTOS DIRECTOS (IRPF) ───────────────────────────
   let totalDirectTax = 0;
   let totalPensionsPaid = 0;
   let totalSubsidiesPaid = 0;
+  let totalPublicWages = 0;
 
   agents.forEach(a => {
     // Ajustar ingresos según cohorte y políticas públicas
     if (a.cohort === 'retired') {
-      // Pensión depende directamente de la asignación social (GF10)
       const pensionRatio = Math.max(0.4, socialAlloc / 0.40);
       a.income = Math.floor(a.baseIncome * pensionRatio * shockPensionFactor);
       totalPensionsPaid += a.income;
     } else if (a.cohort === 'unemployed') {
-      // Subsidio decreciente con los meses en paro
       const subsidyRate = Math.max(0.3, 0.7 - (a.monthsUnemployed * 0.03));
       a.income = Math.floor(a.baseIncome * subsidyRate * (socialAlloc / 0.40));
       a.monthsUnemployed++;
       totalSubsidiesPaid += a.income;
-    } else if (a.cohort === 'public_worker') {
-      // Salario público protegido
-      a.income = a.baseIncome;
+    } else if (PUBLIC_COHORT_KEYS.includes(a.cohort)) {
+      // Todos los funcionarios: salario real calibrado, afectado por austeridad extrema
+      a.income = Math.floor(a.baseIncome * shockPublicWageFactor);
+      totalPublicWages += a.income;
     } else if (a.cohort === 'employed') {
-      // El salario lo paga la empresa
       a.income = a.baseIncome;
       const firm = firmMap.get(a.firmId);
-      if (firm) {
-        firm.wageCost += a.income;
-      }
+      if (firm) firm.wageCost += a.income;
     }
 
     // Cálculo del IRPF (impuesto directo)
@@ -397,9 +433,10 @@ export function stepABMSimulation(abmState, params = {}) {
       totalCorporateTax,
       totalPensionsPaid,
       totalSubsidiesPaid,
-      totalProtesting,
+      totalPublicWages,
       newlyUnemployed: newlyUnemployedIds.length,
       newlyHired: newlyEmployedIds.length,
+      totalProtesting,
     }
   };
 }
@@ -439,13 +476,14 @@ export function aggregateABMMacro(agents, totalPopulation = 47000000) {
   if (!agents || agents.length === 0) return null;
 
   const sampleSize = agents.length;
-  const weight = totalPopulation / sampleSize; // Cada agente representa ~18.800 ciudadanos
+  const weight = totalPopulation / sampleSize;
 
   let totalIncome = 0;
   let totalConsumption = 0;
   let totalTaxes = 0;
   let totalPensions = 0;
   let totalSubsidies = 0;
+  let totalPublicWageBill = 0;
   let protestingCount = 0;
 
   const counts = {
@@ -454,6 +492,11 @@ export function aggregateABMMacro(agents, totalPopulation = 47000000) {
     retired: 0,
     firm_owner: 0,
     public_worker: 0,
+    health_worker: 0,
+    education_worker: 0,
+    defense_worker: 0,
+    admin_worker: 0,
+    justice_worker: 0,
   };
 
   const savingsList = [];
@@ -465,6 +508,7 @@ export function aggregateABMMacro(agents, totalPopulation = 47000000) {
     totalTaxes += a.taxPaid + a.vatPaid;
     if (a.cohort === 'retired') totalPensions += a.income;
     if (a.cohort === 'unemployed') totalSubsidies += a.income;
+    if (PUBLIC_COHORT_KEYS.includes(a.cohort)) totalPublicWageBill += a.income;
     if (a.isProtesting) protestingCount++;
 
     counts[a.cohort] = (counts[a.cohort] || 0) + 1;
@@ -473,7 +517,8 @@ export function aggregateABMMacro(agents, totalPopulation = 47000000) {
   });
 
   // Tasa de desempleo emergente
-  const activePop = counts.employed + counts.unemployed + counts.firm_owner;
+  const totalPublicWorkers = PUBLIC_COHORT_KEYS.reduce((s, k) => s + (counts[k] || 0), 0);
+  const activePop = counts.employed + counts.unemployed + counts.firm_owner + totalPublicWorkers;
   const emergentUnemploymentRate = activePop > 0
     ? Math.round((counts.unemployed / activePop) * 1000) / 10
     : 14.0;
@@ -490,11 +535,13 @@ export function aggregateABMMacro(agents, totalPopulation = 47000000) {
   const projectedMonthlyRevenue = Math.round(totalTaxes * weight);
   const projectedMonthlyGDP = Math.round((totalConsumption + (totalIncome * 0.35)) * weight);
   const projectedMonthlyPensions = Math.round(totalPensions * weight);
+  const projectedMonthlyPublicWages = Math.round(totalPublicWageBill * weight);
 
   return {
     sampleSize,
     agentWeight: Math.round(weight),
     counts,
+    totalPublicWorkers,
     emergentUnemploymentRate,
     emergentSocialPeace,
     wealthGini,
@@ -503,5 +550,6 @@ export function aggregateABMMacro(agents, totalPopulation = 47000000) {
     projectedMonthlyRevenue,
     projectedMonthlyGDP,
     projectedMonthlyPensions,
+    projectedMonthlyPublicWages,
   };
 }

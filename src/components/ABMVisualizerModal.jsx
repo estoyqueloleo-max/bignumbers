@@ -9,18 +9,24 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useABMSimulation } from '../hooks/useABMSimulation';
 import { formatCurrency } from '../utils/formatters';
+import { getDebtLabData, SPAIN_DATA, DEFAULT_YEAR } from '../utils/spainDataCatalog';
 import {
   Users, Play, Pause, StepForward, RotateCcw, AlertTriangle,
   TrendingUp, TrendingDown, DollarSign, Activity, Sparkles,
-  Building2, Flame, Heart, HeartHandshake, ShieldCheck, Zap, X, Search
+  Building2, Flame, Heart, HeartHandshake, ShieldCheck, Zap, X, Search, Landmark
 } from 'lucide-react';
 
 const COHORT_META = {
-  retired: { label: 'Jubilado / Pensionista', color: '#ec4899', icon: '👵' },
-  employed: { label: 'Trabajador Asalariado', color: '#38bdf8', icon: '💼' },
-  unemployed: { label: 'Desempleado (Paro)', color: '#ef4444', icon: '📉' },
-  firm_owner: { label: 'Autónomo / Pyme', color: '#f59e0b', icon: '🏪' },
-  public_worker: { label: 'Empleado Público', color: '#10b981', icon: '🏛️' },
+  retired:           { label: 'Jubilado / Pensionista',    color: '#ec4899', icon: '👵' },
+  employed:          { label: 'Trabajador Asalariado',      color: '#38bdf8', icon: '💼' },
+  unemployed:        { label: 'Desempleado (Paro)',         color: '#ef4444', icon: '📉' },
+  firm_owner:        { label: 'Autónomo / Pyme',           color: '#f59e0b', icon: '🏪' },
+  public_worker:     { label: 'Empleado Público (Resto)',  color: '#10b981', icon: '🏛️' },
+  health_worker:     { label: 'Sanitario Público',         color: '#34d399', icon: '🏥' },
+  education_worker:  { label: 'Docente Público',           color: '#67e8f9', icon: '📚' },
+  defense_worker:    { label: 'Defensa / Seguridad',        color: '#818cf8', icon: '🛡️' },
+  admin_worker:      { label: 'Funcionario AAPP',           color: '#a78bfa', icon: '📄' },
+  justice_worker:    { label: 'Judicatura',                 color: '#c4b5fd', icon: '⚖️' },
 };
 
 export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
@@ -28,6 +34,11 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
   const [hoveredAgent, setHoveredAgent] = useState(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 500 });
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
+  const [activeTab, setActiveTab] = useState('canvas'); // 'canvas' | 'debtlab'
+
+  // Datos del DebtLab para el año actual de datos reales
+  const debtLabYear = gameState?.realDataYear || DEFAULT_YEAR;
+  const debtLab = useMemo(() => getDebtLabData(debtLabYear), [debtLabYear]);
 
   const {
     agents,
@@ -280,8 +291,42 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
           </div>
         </div>
 
-        {/* BARRA DE MAGNITUDES MACRO EMERGENTES */}
-        {macroStats && (
+        {/* TABS DE NAVEGACIÓN */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(0,0,0,0.2)',
+          padding: '0 24px',
+          gap: '4px',
+        }}>
+          {[
+            { id: 'canvas', label: '🏙️ Micro-Mundo', title: 'Visualización de agentes en tiempo real' },
+            { id: 'debtlab', label: '🏦 Laboratorio de Deuda', title: 'Análisis macro: sueldos y deuda pública' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              id={`abm-tab-${tab.id}`}
+              title={tab.title}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                background: activeTab === tab.id ? 'rgba(56,189,248,0.12)' : 'transparent',
+                border: 'none',
+                borderBottom: activeTab === tab.id ? '2px solid #38bdf8' : '2px solid transparent',
+                color: activeTab === tab.id ? '#38bdf8' : '#94a3b8',
+                padding: '8px 16px',
+                fontSize: '0.78rem',
+                fontWeight: activeTab === tab.id ? 700 : 400,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                marginBottom: '-1px',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'canvas' && macroStats && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
@@ -342,8 +387,9 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
           </div>
         )}
 
-        {/* CUERPO PRINCIPAL: CANVAS 2D + PANEL INSPECTOR / CHOQUES */}
-        <div style={{
+        {/* CUERPO PRINCIPAL: depende del tab activo */}
+        {activeTab === 'canvas' ? (
+          <div style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(450px, 1.4fr) minmax(320px, 1fr)',
           flex: 1,
@@ -571,6 +617,15 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
 
                 <button
                   className="btn btn-outline btn-xs"
+                  onClick={() => injectShock('extreme_austerity')}
+                  style={{ borderColor: '#dc2626', color: '#dc2626', textAlign: 'left', padding: '8px', gridColumn: '1 / -1' }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: '0.72rem' }}>☢️ Austeridad Extrema ("¿Puedo pagar la deuda en 1 año?")</div>
+                  <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>Congela el 80% del gasto. Sólo se pagan intereses. Ve el colapso económico emergente.</div>
+                </button>
+
+                <button
+                  className="btn btn-outline btn-xs"
                   onClick={() => injectShock(null)}
                   style={{ borderColor: '#38bdf8', color: '#38bdf8', textAlign: 'left', padding: '8px' }}
                 >
@@ -597,6 +652,239 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
             </div>
           </div>
         </div>
+      ) : (
+        /* ==================== DEBT LAB TAB ==================== */
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px', background: 'rgba(5, 10, 20, 0.9)' }}>
+            {debtLab ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                {/* CABECERA DEL LAB */}
+                <div style={{ textAlign: 'center' }}>
+                  <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 900, color: '#f8fafc' }}>
+                    🏦 Laboratorio de Deuda Pública — España {debtLab.year}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+                    Fuente: IGAE / Contabilidad Nacional AAPP + Eurostat gov_10a_exp
+                  </p>
+                </div>
+
+                {/* RESUMEN DE DEUDA EN CONTEXTO */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px'
+                }}>
+                  {[
+                    {
+                      label: 'Deuda Pública Total',
+                      value: (debtLab.debt / 1e12).toFixed(2) + ' Bill. €',
+                      sub: `${debtLab.debtToGdpPct}% del PIB`,
+                      color: '#ef4444',
+                      icon: '📉'
+                    },
+                    {
+                      label: 'Recaudación Anual',
+                      value: (debtLab.revenue / 1e9).toFixed(0) + ' B€',
+                      sub: `× ${debtLab.debtInYearsOfRevenue} años de ingresos`,
+                      color: '#34d399',
+                      icon: '🏛️'
+                    },
+                    {
+                      label: 'Intereses Anuales',
+                      value: (debtLab.interest / 1e9).toFixed(0) + ' B€',
+                      sub: `${((debtLab.interest / debtLab.spending) * 100).toFixed(1)}% del gasto`,
+                      color: '#f59e0b',
+                      icon: '📅'
+                    },
+                  ].map((card, i) => (
+                    <div key={i} style={{
+                      background: 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${card.color}44`,
+                      borderRadius: '10px',
+                      padding: '12px',
+                      textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: '1.4rem' }}>{card.icon}</div>
+                      <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginBottom: '4px' }}>{card.label}</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 900, color: card.color }}>{card.value}</div>
+                      <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>{card.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* RANKING DE PARTIDAS */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                }}>
+                  <h4 style={{ margin: '0 0 12px', fontSize: '0.85rem', fontWeight: 800, color: '#f1f5f9' }}>
+                    📊 ¿En qué se gasta el Estado? Ranking de Partidas ({debtLab.year})
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {debtLab.partidas.map((p, i) => {
+                      const maxVal = debtLab.partidas[0].value;
+                      const pct = ((p.value / maxVal) * 100).toFixed(0);
+                      const pctOfSpending = ((p.value / debtLab.spending) * 100).toFixed(1);
+                      return (
+                        <div key={i}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', marginBottom: '3px' }}>
+                            <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
+                              {p.icon} {p.label}
+                            </span>
+                            <span style={{ color: p.color, fontWeight: 700 }}>
+                              {(p.value / 1e9).toFixed(0)} B€
+                              <span style={{ color: '#64748b', fontWeight: 400, marginLeft: '4px' }}>({pctOfSpending}%)</span>
+                            </span>
+                          </div>
+                          <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${pct}%`,
+                              height: '100%',
+                              background: `linear-gradient(90deg, ${p.color}88, ${p.color})`,
+                              borderRadius: '4px',
+                              transition: 'width 0.5s ease',
+                            }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* DESGLOSE DE SUELDOS DE FUNCIONARIOS */}
+                {debtLab.wagesByFunction && (
+                  <div style={{
+                    background: 'rgba(167, 139, 250, 0.04)',
+                    border: '1px solid rgba(167, 139, 250, 0.2)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                  }}>
+                    <h4 style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 800, color: '#f1f5f9' }}>
+                      👔 Sueldos de Funcionarios — {debtLab.year}
+                    </h4>
+                    <p style={{ margin: '0 0 12px', fontSize: '0.68rem', color: '#94a3b8' }}>
+                      Masa salarial total: <strong style={{ color: '#a78bfa' }}>{(debtLab.wages / 1e9).toFixed(0)} B€/año</strong>
+                      &nbsp;· {debtLab.totalWorkers?.toLocaleString('es-ES')} empleados públicos
+                      &nbsp;· Sueldo medio bruto: <strong style={{ color: '#a78bfa' }}>{debtLab.avgMonthlyWage?.toLocaleString('es-ES')}€/mes</strong>
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {Object.entries(debtLab.wagesByFunction).map(([key, data]) => {
+                        const labels = {
+                          health: '🏥 Sanidad Pública',
+                          education: '📚 Educación',
+                          defense: '🛡️ Defensa/Seguridad',
+                          admin: '📄 Admin. General',
+                          justice: '⚖️ Justicia',
+                          other: '🏛️ Resto AAPP',
+                        };
+                        return (
+                          <div key={key} style={{
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(167,139,250,0.15)',
+                            borderRadius: '8px',
+                            padding: '10px',
+                          }}>
+                            <div style={{ fontSize: '0.7rem', color: '#e2e8f0', fontWeight: 700, marginBottom: '4px' }}>
+                              {labels[key] || key}
+                            </div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 900, color: '#a78bfa' }}>
+                              {(data.value / 1e9).toFixed(1)} B€
+                            </div>
+                            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>
+                              {data.workers?.toLocaleString('es-ES')} empleados
+                              &nbsp;· {data.avgMonthly?.toLocaleString('es-ES')}€ bruto/mes
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* CALCULADORA: ¿CUÁNTO SE TARDA EN PAGAR LA DEUDA? */}
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.04)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: '0.85rem', fontWeight: 800, color: '#f1f5f9' }}>
+                    🧮 ¿Puede España pagar su deuda en 1 año?
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+                    <div style={{
+                      background: 'rgba(239,68,68,0.08)', borderRadius: '8px', padding: '12px',
+                      border: '1px solid rgba(239,68,68,0.2)'
+                    }}>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '4px' }}>
+                        Escenario Real: ¿con el superavit/déficit actual?
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 900, color: debtLab.debtPayoffYears ? '#34d399' : '#ef4444' }}>
+                        {debtLab.debtPayoffYears
+                          ? `✅ ${debtLab.debtPayoffYears} años (si hubiera superávit continuo)`
+                          : '❌ IMPOSIBLE — Hay déficit. La deuda crece cada año.'}
+                      </div>
+                      <div style={{ fontSize: '0.62rem', color: '#64748b', marginTop: '4px' }}>
+                        {debtLab.debtPayoffYears
+                          ? `Con un superávit anual de ${((debtLab.revenue - debtLab.spending) / 1e9).toFixed(0)} B€`
+                          : `Déficit anual: ${((debtLab.revenue - debtLab.spending) / 1e9).toFixed(0)} B€. Sin recortar, la deuda sigue creciendo.`
+                        }
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(245,158,11,0.08)', borderRadius: '8px', padding: '12px',
+                      border: '1px solid rgba(245,158,11,0.2)'
+                    }}>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '4px' }}>
+                        Hipotético: Congelar TODO el gasto excepto intereses
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#f59e0b' }}>
+                        {debtLab.hypotheticalPayoffYears
+                          ? `⏱ ${debtLab.hypotheticalPayoffYears} años para liquidar la deuda`
+                          : 'Sin datos suficientes'}
+                      </div>
+                      <div style={{ fontSize: '0.62rem', color: '#64748b', marginTop: '4px' }}>
+                        Si se suspendieran pensiones, sueldos públicos, sanidad y educación — sólo se pagan los intereses ({(debtLab.interest / 1e9).toFixed(0)} B€/año). El resto ({((debtLab.revenue - debtLab.interest) / 1e9).toFixed(0)} B€) se destina a capital. Pero el colapso económico reduciría la recaudación → espiral deflacionaria.
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(239,68,68,0.12)', borderRadius: '8px', padding: '12px',
+                      border: '1px solid rgba(220,38,38,0.3)',
+                      display: 'flex', alignItems: 'center', gap: '12px',
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '0.72rem', color: '#fca5a5', fontWeight: 700, marginBottom: '4px' }}>
+                          ☢️ Simular "Austeridad Extrema" en el Micro-Mundo
+                        </div>
+                        <div style={{ fontSize: '0.6rem', color: '#94a3b8' }}>
+                          Activa el choque en los {agents.length.toLocaleString('es-ES')} agentes y observa cómo emerge el colapso: 
+                          desempleo ↑, consumo ↓, protestas masivas, espiral recesiva.
+                        </div>
+                      </div>
+                      <button
+                        id="abm-extreme-austerity-btn"
+                        className="btn btn-sm"
+                        onClick={() => { injectShock('extreme_austerity'); setActiveTab('canvas'); }}
+                        style={{ background: '#dc2626', color: '#fff', border: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+                      >
+                        ⚡ Aplicar Choque
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', color: '#64748b', padding: '40px' }}>
+                No hay datos disponibles para el año {debtLabYear}.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
