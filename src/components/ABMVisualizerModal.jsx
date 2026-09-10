@@ -121,8 +121,13 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
   // Palancas de gasto (mezcla)
   const [leverGasto, setLeverGasto] = useState(0);           // % recorte gasto no esencial (0-15)
   const [leverEficiencia, setLeverEficiencia] = useState(0); // % eficiencia administrativa (0-10)
+  // Palancas demográficas y muro de las pensiones (Baby Boom 2025-2045)
+  const [leverBabyBoom, setLeverBabyBoom] = useState(3.2);       // +pp PIB gasto pensiones en pico 2040 (0-4.5)
+  const [leverRetrasoJubilacion, setLeverRetrasoJubilacion] = useState(0); // años retraso edad efectiva (0-3)
+  const [leverMigracion, setLeverMigracion] = useState(150);     // miles cotizantes netos/año (0-400k)
+  const [leverMei, setLeverMei] = useState(0);                  // puntos % extra MEI / cotizaciones (0-6)
 
-  // Trayectoria de deuda a 30 años (2024-2054)
+  // Trayectoria de deuda a 30 años (2024-2054) con impacto demográfico
   const debtTrajectory = useMemo(() => {
     // ── Parámetros base 2024 ────────────────────────────────────────────
     const BASE_DEBT_PCT   = 105.1;   // % PIB
@@ -145,48 +150,88 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
       leverGasto      * (BASE_SPENDING_BN - BASE_INTEREST_BN) * 0.01 + // % del gasto no-intereses
       leverEficiencia * (BASE_SPENDING_BN - BASE_INTEREST_BN) * 0.01;
 
-    // ── Crecimiento nominal del PIB (palanca más potente) ────────────────
-    const gNominal = leverCrecimiento / 100;
+    // ── Ingresos demográficos y reformas de pensiones ────────────────────
+    const migrationRevenueBn = (leverMigracion / 100) * 1.8; // 100k cotizantes = 1.8 B€/año SS
+    const meiRevenueBn = leverMei * 1.2;                    // 1 pp MEI = 1.2 B€/año SS
+    const extraDemographicRevBn = migrationRevenueBn + meiRevenueBn;
+
+    // ── Crecimiento nominal del PIB + aporte migratorio a fuerza laboral ─
+    const migrationGrowth = (leverMigracion / 100) * 0.0015; // +100k = +0.15% crecimiento PIB
+    const gNominal = (leverCrecimiento / 100) + migrationGrowth;
 
     // ── Calcular año a año ───────────────────────────────────────────────
     const trajectory  = [];
-    const trajectoryBase = []; // sin palancas (escenario inmovilismo)
+    const trajectoryBase = [];  // sin palancas (inmovilismo con presión demográfica base)
+    const trajectoryIdeal = []; // con reformas pero SIN envejecimiento (ideal)
 
-    let debtBn    = BASE_PIB_BN * (BASE_DEBT_PCT / 100);
-    let pib       = BASE_PIB_BN;
-    let revenue   = BASE_REVENUE_BN;
-    let debtBnBase = debtBn;
-    let pibBase   = BASE_PIB_BN;
+    let debtBn         = BASE_PIB_BN * (BASE_DEBT_PCT / 100);
+    let pib            = BASE_PIB_BN;
+    let revenue        = BASE_REVENUE_BN;
+
+    let debtBnBase     = debtBn;
+    let pibBase        = BASE_PIB_BN;
+
+    let debtBnIdeal    = debtBn;
+    let pibIdeal       = BASE_PIB_BN;
+    let revenueIdeal   = BASE_REVENUE_BN;
+
+    let cumulativePensionCost = 0;
+    let peakYearPensionBn = 0;
 
     for (let y = 0; y <= YEARS; y++) {
       const year = 2024 + y;
       const debtPct = (debtBn / pib) * 100;
       const debtPctBase = (debtBnBase / pibBase) * 100;
+      const debtPctIdeal = (debtBnIdeal / pibIdeal) * 100;
+
       trajectory.push({ year, debtPct: Math.max(0, debtPct), debtBn: Math.round(debtBn) });
       trajectoryBase.push({ year, debtPct: Math.max(0, debtPctBase) });
+      trajectoryIdeal.push({ year, debtPct: Math.max(0, debtPctIdeal) });
 
-      // ── Escenario con palancas activas ───────────────────────────────
+      // ── DINÁMICA DEMOGRÁFICA (BABY BOOM) ─────────────────────────────
+      // La ola de jubilaciones escala entre 2024 y 2040 (y = 16)
+      const progress = Math.min(1, y / 16);
+      const grossPensionPressurePct = progress * leverBabyBoom;
+      const pensionSavingsPct = leverRetrasoJubilacion * 0.45; // cada año de retraso ahorra ~0.45 pp PIB
+      const netPensionPressurePct = Math.max(0, grossPensionPressurePct - pensionSavingsPct);
+      const pensionCostBn = (netPensionPressurePct / 100) * pib;
+
+      if (y === 16) {
+        peakYearPensionBn = pensionCostBn;
+      }
+      cumulativePensionCost += pensionCostBn;
+
+      // ── Escenario con palancas activas y demografía ───────────────────
       const interestCost = debtBn * BASE_INTEREST_RATE;
-      const totalRevenue = revenue + extraRevenueBn;
-      const totalSpending = BASE_SPENDING_BN - savingsBn;
-      const primaryBalance = totalRevenue - (totalSpending - interestCost); // excluye intereses del gasto
-      const deficit = totalSpending - totalRevenue; // positivo = déficit
+      const totalRevenue = revenue + extraRevenueBn + extraDemographicRevBn;
+      const totalSpending = (BASE_SPENDING_BN - savingsBn) + pensionCostBn;
+      const deficit = totalSpending - totalRevenue;
 
-      // Dinámica de deuda: d(t+1) = d(t) + déficit
       debtBn = Math.max(0, debtBn + deficit);
       pib = pib * (1 + gNominal);
-      revenue = revenue * (1 + gNominal * 0.85); // recaudación crece algo menos que el PIB
+      revenue = revenue * (1 + gNominal * 0.85);
 
-      // ── Escenario base sin palancas (crecimiento 2%, déficit actual) ──
-      const baseDeficit = BASE_SPENDING_BN - BASE_REVENUE_BN; // ~50 B€ déficit
+      // ── Escenario Ideal (reformas activas pero SIN impacto del Baby Boom)
+      const totalRevenueIdeal = revenueIdeal + extraRevenueBn + extraDemographicRevBn;
+      const totalSpendingIdeal = (BASE_SPENDING_BN - savingsBn);
+      const deficitIdeal = totalSpendingIdeal - totalRevenueIdeal;
+
+      debtBnIdeal = Math.max(0, debtBnIdeal + deficitIdeal);
+      pibIdeal = pibIdeal * (1 + gNominal);
+      revenueIdeal = revenueIdeal * (1 + gNominal * 0.85);
+
+      // ── Escenario base inmovilismo (con demografía base de AIReF) ───────
+      const basePensionCostBn = (grossPensionPressurePct / 100) * pibBase;
+      const baseDeficit = (BASE_SPENDING_BN + basePensionCostBn) - BASE_REVENUE_BN;
       debtBnBase = Math.max(0, debtBnBase + baseDeficit);
-      pibBase = pibBase * 1.02; // 2% crecimiento base
+      pibBase = pibBase * 1.02;
     }
 
     // ── Años hasta alcanzar umbrales ─────────────────────────────────────
     const find60 = trajectory.find(p => p.debtPct <= 60);
     const find30 = trajectory.find(p => p.debtPct <= 30);
     const base60 = trajectoryBase.find(p => p.debtPct <= 60);
+    const ideal30 = trajectoryIdeal.find(p => p.debtPct <= 30);
 
     // Intereses totales pagados acumulados (simplificado)
     const totalInterestPaid = Math.round(trajectory.reduce((acc, p, i) => {
@@ -194,12 +239,23 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
       return acc + p.debtBn * BASE_INTEREST_RATE;
     }, 0));
 
-    return { trajectory, trajectoryBase, find60, find30, base60, totalInterestPaid, extraRevenueBn, savingsBn };
-  }, [leverSumergida, leverSociedades, leverCrecimiento, leverIed, leverAutonomos, leverGasto, leverEficiencia]);
+    const demographicAbsorbed = (extraRevenueBn + savingsBn + extraDemographicRevBn) >= peakYearPensionBn;
+
+    return {
+      trajectory, trajectoryBase, trajectoryIdeal,
+      find60, find30, base60, ideal30,
+      totalInterestPaid, extraRevenueBn, savingsBn,
+      extraDemographicRevBn, cumulativePensionCost, peakYearPensionBn, demographicAbsorbed
+    };
+  }, [
+    leverSumergida, leverSociedades, leverCrecimiento, leverIed, leverAutonomos,
+    leverGasto, leverEficiencia,
+    leverBabyBoom, leverRetrasoJubilacion, leverMigracion, leverMei
+  ]);
 
   // SVG de trayectoria (línea proyectada 2024-2054)
   const trajectorySvg = useMemo(() => {
-    const { trajectory, trajectoryBase } = debtTrajectory;
+    const { trajectory, trajectoryBase, trajectoryIdeal } = debtTrajectory;
     const w = 680; const h = 180;
     const padL = 40; const padR = 16; const padT = 16; const padB = 30;
     const plotW = w - padL - padR;
@@ -214,9 +270,10 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
 
     const lineActive = toPath(trajectory);
     const lineBase   = toPath(trajectoryBase);
+    const lineIdeal  = toPath(trajectoryIdeal);
     const areaPath   = `${lineActive} L ${getX(2054).toFixed(1)} ${(padT + plotH).toFixed(1)} L ${getX(2024).toFixed(1)} ${(padT + plotH).toFixed(1)} Z`;
 
-    return { w, h, padL, padR, padT, padB, plotW, plotH, getX, getY, lineActive, lineBase, areaPath };
+    return { w, h, padL, padR, padT, padB, plotW, plotH, getX, getY, lineActive, lineBase, lineIdeal, areaPath };
   }, [debtTrajectory]);
 
 
@@ -1577,6 +1634,7 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                         onClick={() => {
                           setLeverSumergida(0); setLeverSociedades(0); setLeverCrecimiento(2);
                           setLeverIed(0); setLeverAutonomos(0); setLeverGasto(0); setLeverEficiencia(0);
+                          setLeverBabyBoom(3.2); setLeverRetrasoJubilacion(0); setLeverMigracion(150); setLeverMei(0);
                         }}
                         style={{
                           background: 'rgba(255,255,255,0.04)',
@@ -1591,6 +1649,103 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                       >
                         ↺ Resetear todo
                       </button>
+                    </div>
+                  </div>
+
+                  {/* ─── BLOQUE DEMOGRÁFICO: EL MURO DE LAS PENSIONES (BABY BOOM 2025–2045) ─── */}
+                  <div style={{
+                    background: 'rgba(168, 85, 247, 0.05)',
+                    border: '1px solid rgba(168, 85, 247, 0.22)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    marginBottom: '14px',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '1.2rem' }}>👵</span>
+                        <div>
+                          <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#e9d5ff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            El Muro Demográfico: Tsunami de Pensiones del Baby Boom (2025–2045)
+                          </div>
+                          <div style={{ fontSize: '0.62rem', color: '#c084fc' }}>
+                            La jubilación de la generación 1958-1977 añade hasta +3,2 pp de PIB en gasto público (AIReF). ¿Logras neutralizarlo?
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Badge reactivo */}
+                      <div style={{
+                        padding: '4px 10px',
+                        borderRadius: '20px',
+                        fontSize: '0.62rem',
+                        fontWeight: 800,
+                        background: debtTrajectory.demographicAbsorbed ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        color: debtTrajectory.demographicAbsorbed ? '#34d399' : '#f87171',
+                        border: `1px solid ${debtTrajectory.demographicAbsorbed ? '#34d399' : '#f87171'}55`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                      }}>
+                        <span>{debtTrajectory.demographicAbsorbed ? '✅' : '⚠️'}</span>
+                        <span>
+                          {debtTrajectory.demographicAbsorbed
+                            ? 'Impacto absorbido por reformas y crecimiento'
+                            : `Tensión pico (2040): +${debtTrajectory.peakYearPensionBn.toFixed(0)} B€/año`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 4 Sliders demográficos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                      {[
+                        {
+                          label: '💥 Presión Baby Boom (PIB)',
+                          sub: `Pico 2040: +${leverBabyBoom}% PIB gasto`,
+                          val: leverBabyBoom,
+                          set: setLeverBabyBoom,
+                          min: 0, max: 4.5, step: 0.25, unit: ' pp',
+                          color: '#f43f5e',
+                        },
+                        {
+                          label: '⏳ Retraso edad efectiva',
+                          sub: leverRetrasoJubilacion > 0 ? `−${(leverRetrasoJubilacion * 0.45).toFixed(2)} pp PIB de presión` : 'Edad actual (~64.8 años)',
+                          val: leverRetrasoJubilacion,
+                          set: setLeverRetrasoJubilacion,
+                          min: 0, max: 3, step: 0.5, unit: ' años',
+                          color: '#a855f7',
+                        },
+                        {
+                          label: '🧳 Saldo migratorio neto',
+                          sub: `+${((leverMigracion / 100) * 1.8).toFixed(1)} B€ SS / +${((leverMigracion / 100) * 0.15).toFixed(2)}% PIB`,
+                          val: leverMigracion,
+                          set: setLeverMigracion,
+                          min: 0, max: 400, step: 25, unit: 'k/año',
+                          color: '#38bdf8',
+                        },
+                        {
+                          label: '⚖️ Mecanismo Equidad (MEI)',
+                          sub: leverMei > 0 ? `+${(leverMei * 1.2).toFixed(1)} B€ fondo reserva` : 'Sin ajuste adicional',
+                          val: leverMei,
+                          set: setLeverMei,
+                          min: 0, max: 6, step: 0.5, unit: ' pp',
+                          color: '#c084fc',
+                        },
+                      ].map(s => (
+                        <div key={s.label} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span style={{ fontSize: '0.61rem', color: '#e2e8f0', fontWeight: 600 }}>{s.label}</span>
+                            <span style={{ fontSize: '0.64rem', color: s.color, fontWeight: 800, fontFamily: 'monospace' }}>
+                              {s.val}{s.unit}
+                            </span>
+                          </div>
+                          <input
+                            type="range" min={s.min} max={s.max} step={s.step} value={s.val}
+                            onChange={e => s.set(Number(e.target.value))}
+                            style={{ width: '100%', accentColor: s.color, cursor: 'pointer', height: '14px' }}
+                          />
+                          <div style={{ fontSize: '0.56rem', color: '#94a3b8', marginTop: '2px' }}>{s.sub}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -1645,10 +1800,13 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                         );
                       })}
 
-                      {/* Línea base (escenario sin palancas — rojo) */}
+                      {/* Línea base (inmovilismo con presión demográfica — rojo) */}
                       <path d={trajectorySvg.lineBase} fill="none" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.6" />
 
-                      {/* Área y línea activa (escenario con palancas — verde) */}
+                      {/* Línea ideal (con reformas pero SIN envejecimiento — cian punteada) */}
+                      <path d={trajectorySvg.lineIdeal} fill="none" stroke="#38bdf8" strokeWidth="1.6" strokeDasharray="3 3" opacity="0.75" />
+
+                      {/* Área y línea activa (tu escenario con demografía real — verde) */}
                       <path d={trajectorySvg.areaPath} fill="url(#trajGrad)" />
                       <path d={trajectorySvg.lineActive} fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
@@ -1668,11 +1826,16 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                         </circle>
                       )}
                     </svg>
+
                     {/* Leyenda */}
-                    <div style={{ display: 'flex', gap: '14px', padding: '4px 8px 2px', fontSize: '0.6rem', color: '#64748b' }}>
+                    <div style={{ display: 'flex', gap: '14px', padding: '4px 8px 2px', fontSize: '0.6rem', color: '#64748b', flexWrap: 'wrap' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span style={{ width: 16, height: 2, background: '#34d399', display: 'inline-block', borderRadius: 2 }}></span>
-                        Tu escenario
+                        Tu escenario (con demografía)
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: 16, height: 2, background: '#38bdf8', display: 'inline-block', borderRadius: 2, borderTop: '2px dashed #38bdf8' }}></span>
+                        Sin envejecimiento (ideal)
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span style={{ width: 16, height: 2, background: '#ef4444', display: 'inline-block', borderRadius: 2, opacity: 0.6 }}></span>
@@ -1685,27 +1848,20 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                     </div>
                   </div>
 
-                  {/* TARJETAS DE RESULTADO */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {/* 4 TARJETAS DE RESULTADO */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                     <div style={{
                       background: debtTrajectory.find60 ? 'rgba(234,179,8,0.08)' : 'rgba(239,68,68,0.06)',
                       border: `1px solid ${debtTrajectory.find60 ? '#eab308' : '#ef4444'}44`,
                       borderRadius: '8px', padding: '10px', textAlign: 'center',
                     }}>
-                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>🎯 Alcanzar Maastricht (60%)</div>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>🎯 Maastricht (60%)</div>
                       <div style={{ fontSize: '1.1rem', fontWeight: 900, color: debtTrajectory.find60 ? '#eab308' : '#ef4444' }}>
                         {debtTrajectory.find60 ? `${debtTrajectory.find60.year - 2024} años` : '> 30 años'}
                       </div>
                       <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
-                        {debtTrajectory.find60 ? `En ${debtTrajectory.find60.year}` : 'No alcanzable sin cambios'}
+                        {debtTrajectory.find60 ? `En ${debtTrajectory.find60.year}` : 'No alcanzable'}
                       </div>
-                      {debtTrajectory.base60 && debtTrajectory.find60 && (
-                        <div style={{ fontSize: '0.56rem', color: '#34d399', marginTop: '2px' }}>
-                          {debtTrajectory.base60.year - debtTrajectory.find60.year > 0
-                            ? `${debtTrajectory.base60.year - debtTrajectory.find60.year} años antes que sin palancas`
-                            : ''}
-                        </div>
-                      )}
                     </div>
 
                     <div style={{
@@ -1713,12 +1869,26 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                       border: `1px solid ${debtTrajectory.find30 ? '#34d399' : '#475569'}44`,
                       borderRadius: '8px', padding: '10px', textAlign: 'center',
                     }}>
-                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>🏆 Objetivo 30% (nivel 1980)</div>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>🏆 Objetivo 30% (1980)</div>
                       <div style={{ fontSize: '1.1rem', fontWeight: 900, color: debtTrajectory.find30 ? '#34d399' : '#475569' }}>
                         {debtTrajectory.find30 ? `${debtTrajectory.find30.year - 2024} años` : '> 30 años'}
                       </div>
                       <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
-                        {debtTrajectory.find30 ? `En ${debtTrajectory.find30.year}` : 'Fuera del horizonte'}
+                        {debtTrajectory.find30 ? `En ${debtTrajectory.find30.year}` : (debtTrajectory.ideal30 ? `(Ideal: ${debtTrajectory.ideal30.year})` : 'Fuera horizonte')}
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(168, 85, 247, 0.08)',
+                      border: '1px solid rgba(168, 85, 247, 0.25)',
+                      borderRadius: '8px', padding: '10px', textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: '0.58rem', color: '#e9d5ff', marginBottom: '3px' }}>👵 Coste Pensiones (30a)</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#c084fc' }}>
+                        +{debtTrajectory.cumulativePensionCost.toFixed(0)} B€
+                      </div>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>
+                        Pico 2040: +{debtTrajectory.peakYearPensionBn.toFixed(0)} B€/año
                       </div>
                     </div>
 
@@ -1727,11 +1897,11 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                       border: '1px solid rgba(167,139,250,0.2)',
                       borderRadius: '8px', padding: '10px', textAlign: 'center',
                     }}>
-                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>💸 Intereses pagados (30 años)</div>
+                      <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginBottom: '3px' }}>💸 Intereses Deuda (30a)</div>
                       <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#a78bfa' }}>
                         {debtTrajectory.totalInterestPaid.toFixed(0)} B€
                       </div>
-                      <div style={{ fontSize: '0.58rem', color: '#64748b' }}>Coste acumulado deuda</div>
+                      <div style={{ fontSize: '0.58rem', color: '#64748b' }}>Coste financiero acum.</div>
                     </div>
                   </div>
 
@@ -1746,9 +1916,11 @@ export function ABMVisualizerModal({ onClose, gameState, numberingSystem }) {
                     color: '#a7f3d0',
                     lineHeight: 1.5,
                   }}>
-                    <strong>📌 Clave:</strong> El 80% de la reducción histórica de deuda/PIB en España (1996-2007) fue por el denominador
-                    (crecimiento del PIB), no por el numerador (amortización). La diferencia entre el tipo de interés y el crecimiento
-                    (spread r−g) es el factor crítico: cuando g &gt; r, la deuda/PIB cae sola aunque haya déficit moderado.
+                    <strong>📌 Clave Demográfica & Macro:</strong> El crecimiento nominal del PIB es el principal motor para licuar la deuda (vía denominador),
+                    pero en España choca directamente contra la jubilación de la generación del baby boom (1958-1977).
+                    Sin reformas en la edad efectiva o aporte de nuevos cotizantes netos, el gasto en pensiones añadirá hasta <strong>+3,2 pp de PIB</strong> (AIReF),
+                    neutralizando los superávits primarios. Compara la curva verde (tu escenario real) con la línea cian punteada (escenario ideal sin presión demográfica)
+                    para ver el "peaje" del envejecimiento poblacional.
                   </div>
                 </div>
 
