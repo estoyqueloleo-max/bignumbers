@@ -7,8 +7,19 @@
 ---
 
 > [!NOTE]
-> **Nota de Desarrollo & Repaso Completo:**
-> Este repositorio contiene la suite completa **Master Edition (v9.0)** desarrollada paso a paso. Consulta [TODO.md](./TODO.md) para ver el registro detallado de todas las fases y módulos integrados.
+> **🌟 Release Oficial v1.0.0 (Master Edition):**
+> Esta versión introduce la **reorganización en 3 pasos pedagógicos** (Calibre de Cifras, Gobernar España con Presupuestos Reales y Futuros con Efecto Ender), el visor unificado con la **Lupa Micro (2.500 Vidas)** y el **Laboratorio de Fenómenos Dinámicos y Psicología Social** (con rasgos como *Desgaste Cognitivo por Móvil*, *Solidaridad Familiar* y creador visual de nuevos fenómenos).
+
+---
+
+## 🧭 Arquitectura de Descubrimiento (El Viaje del Jugador)
+
+1. **📏 Paso 1: Calibre de Cifras (Escala Sensorial)**: Escalera de potencias de 10 ($10^0$ a $10^{14}$), equivalencias de tiempo a 1€/segundo (1 millón = 11,5 días; 1 billón = 31.700 años), comparador del café al PIB y bloque isométrico 3D.
+2. **🏛️ Paso 2: Gobernar España (Cifras Reales + ABM Vivo)**: Presupuestos Generales del Estado oficiales (PGE) con selector de año histórico y visor de doble lente:
+   * **Vista Macro**: Ciudad, skyline, clima, ciclo solar y alertas de crisis.
+   * **Lupa Micro (2.500 Vidas)**: Canvas en tiempo real donde cada ciudadano tiene expediente interactivo (nómina, ahorros, consumo, salud y postura política ante huelgas).
+   * **Cerebro Social & Traits**: Calibra la psicología colectiva e inventa nuevos fenómenos con impactos en cascada.
+3. **🚀 Paso 3: Futuros & El Efecto Ender**: Votación multilateral con 3 IAs, globo 3D, dilemas de teoría de juegos, revelación con datos reales del planeta (SIPRI, OMS, FMI) y escenarios *What If*.
 
 ---
 

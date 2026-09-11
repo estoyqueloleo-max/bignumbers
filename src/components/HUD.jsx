@@ -46,85 +46,38 @@ Mandato en el mes ${state.month}.
     <div className="hud-bar glass-panel mb-4">
       <div className="hud-top-row d-flex justify-between align-center flex-wrap gap-2">
         <div className="hud-scenario-badge d-flex align-center gap-2 flex-wrap">
-          <button
-            className="btn btn-outline btn-xs d-flex align-center gap-1"
+          <div
+            className="badge badge-cyan d-flex align-center gap-1 cursor-pointer"
             onClick={onOpenScenarios}
-            title="Cambiar Escenario o Modo de Juego"
+            title="Escenario activo en el motor macroeconómico (Clic para cambiar)"
+            style={{ padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer' }}
           >
-            <Flag size={14} className="text-cyan" />
-            <span>{currentScenario.name}</span>
-            <span className="badge badge-cyan text-xs">{currentScenario.tag}</span>
-          </button>
+            <Flag size={13} className="text-cyan" />
+            <span className="font-bold">{currentScenario.name}</span>
+            <span className="opacity-80">({currentScenario.tag})</span>
+          </div>
 
-          <button
-            id="hud-open-abm-btn"
-            className="btn btn-outline btn-xs d-flex align-center gap-1"
-            onClick={onOpenABM}
-            title="Micro-Mundo ABM: Simulación Basada en 2.500 Agentes"
-            style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(56, 189, 248, 0.1)' }}
-          >
-            <Users size={14} className="text-cyan" />
-            <span className="text-cyan font-bold">Micro-Mundo ABM</span>
-            <span className="badge badge-cyan text-xs">2.500 Agentes</span>
-          </button>
+          {state.realDataYear && (
+            <span className="badge" style={{ background: 'rgba(99,102,241,0.2)', color: '#a5b4fc', fontSize: '0.75rem' }}>
+              🇪🇸 Datos Oficiales {state.realDataYear}
+            </span>
+          )}
 
-          <button
-            className="btn btn-outline btn-xs d-flex align-center gap-1 assembly-btn-highlight"
-            onClick={onOpenAssembly}
-            title="Asamblea de Naciones: Dilema del Prisionero & Efecto Ender"
-          >
-            <Globe size={14} className="text-warning animate-pulse" />
-            <span className="text-warning font-bold">Asamblea Global</span>
-          </button>
-
-          <button
-            className="btn btn-outline btn-xs d-flex align-center gap-1"
-            onClick={onOpenDiplomacy}
-            title="Diplomacia Asíncrona por Correo y Tratados Bilaterales"
-          >
-            <Mail size={14} className="text-cyan" />
-            <span>Diplomacia P2P</span>
-          </button>
-
-          <button
-            className="btn btn-outline btn-xs d-flex align-center gap-1"
-            onClick={onOpenPassport}
-            title="Pasaporte Presidencial y Firma Criptográfica (ECDSA)"
-          >
-            <ShieldCheck size={14} className="text-warning" />
-            <span>Pasaporte</span>
-          </button>
-
-          <button
-            className="btn btn-outline btn-xs d-flex align-center gap-1"
-            onClick={onOpenGazetteExport}
-            title="Exportar Portada Oficial de la Gaceta del Estado"
-          >
-            <Printer size={14} className="text-cyan" />
-            <span>Imprimir Portada</span>
-          </button>
-
-          <button
-            className="btn btn-outline btn-xs d-flex align-center gap-1"
-            onClick={onOpenRules}
-            title="Motor de Expansión de Reglas & Mods"
-          >
-            <Sliders size={14} className="text-cyan" />
-            <span>Reglas & Mods</span>
-            {activeModifiers?.activeCount > 0 && (
-              <span className="badge badge-success text-xs">{activeModifiers.activeCount} activas</span>
-            )}
-          </button>
+          {activeModifiers?.activeCount > 0 && (
+            <span className="badge badge-success text-xs">
+              ⚙️ {activeModifiers.activeCount} mods activos
+            </span>
+          )}
         </div>
 
-        <div className="hud-share-box">
+        <div className="hud-share-box d-flex align-center gap-2">
           <button
             className="btn btn-outline btn-xs d-flex align-center gap-1"
             onClick={handleShareGame}
-            title="Compartir partida por Web Share API o WhatsApp (P2P / Asíncrono)"
+            title="Compartir estado de la partida por Web Share API o WhatsApp"
           >
             {shared ? <Check size={14} className="text-success" /> : <Share2 size={14} className="text-cyan" />}
-            <span>{shared ? '¡Enlace Compartido!' : 'Compartir Partida (P2P)'}</span>
+            <span>{shared ? '¡Copiado!' : 'Compartir Estado'}</span>
           </button>
         </div>
       </div>

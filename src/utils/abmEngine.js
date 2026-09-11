@@ -245,6 +245,15 @@ export function stepABMSimulation(abmState, params = {}) {
   const rdAlloc = (params.ministryAllocations?.rd ?? 15) / 100;
   const shock = params.shock || null;
 
+  // Efectos agregados de los fenómenos y rasgos sociales activos
+  const traitEffects = params.traitEffects || {
+    productivityMultiplier: 1.0,
+    healthBonusPerTick: 0,
+    protestSensitivityMultiplier: 1.0,
+    consumptionPropensityDelta: 0,
+    capitalFlightRate: 0
+  };
+
   // Mapa de empresas para búsqueda rápida
   const firmMap = new Map();
   firms.forEach(f => {
@@ -302,10 +311,12 @@ export function stepABMSimulation(abmState, params = {}) {
     const netIncome = Math.max(0, a.income - a.taxPaid);
 
     // ─── FASE 2: CONSUMO Y AHORRO (Demanda agregada) ──────────────────────────
-    // Propensión marginal al consumo: los de menor renta consumen casi todo su ingreso
-    const propensityToConsume = a.cohort === 'unemployed' || a.cohort === 'retired'
+    // Propensión marginal al consumo: modulada por los rasgos sociales
+    const basePropensity = a.cohort === 'unemployed' || a.cohort === 'retired'
       ? 0.94
       : (a.income > 2500 ? 0.65 : 0.82);
+
+    const propensityToConsume = Math.max(0.35, Math.min(0.98, basePropensity + (traitEffects.consumptionPropensityDelta || 0)));
 
     const targetConsumption = netIncome * propensityToConsume * shockConsumptionFactor;
 
@@ -324,10 +335,12 @@ export function stepABMSimulation(abmState, params = {}) {
     a.vatPaid = Math.floor(actualConsumption * 0.18 * taxRate);
     a.consumption = actualConsumption;
 
-    // El gasto en consumo se reparte entre las empresas del país
+    // El gasto en consumo local se reparte entre las empresas del país
+    // (descontando fuga de capital digital hacia plataformas externas)
+    const localConsumptionFraction = Math.max(0.5, 1.0 - (traitEffects.capitalFlightRate || 0));
     const randomFirm = firms[Math.floor(Math.random() * firms.length)];
     if (randomFirm) {
-      randomFirm.monthlyRevenue += actualConsumption - a.vatPaid;
+      randomFirm.monthlyRevenue += Math.floor((actualConsumption - a.vatPaid) * localConsumptionFraction);
     }
   });
 
@@ -340,8 +353,9 @@ export function stepABMSimulation(abmState, params = {}) {
   const unemployedPool = agents.filter(a => a.cohort === 'unemployed');
 
   firms.forEach(f => {
-    // Beneficio neto de la empresa
-    const grossProfit = f.monthlyRevenue - f.wageCost - (f.monthlyRevenue * 0.12); // 12% costes fijos
+    // Beneficio neto de la empresa modulado por la productividad social efectiva
+    const effectiveRevenue = f.monthlyRevenue * (traitEffects.productivityMultiplier || 1.0);
+    const grossProfit = effectiveRevenue - f.wageCost - (effectiveRevenue * 0.12); // 12% costes fijos
     const corpTaxRate = Math.min(0.35, 0.22 * taxRate);
     const corpTax = grossProfit > 0 ? Math.floor(grossProfit * corpTaxRate) : 0;
     totalCorporateTax += corpTax;
@@ -395,8 +409,8 @@ export function stepABMSimulation(abmState, params = {}) {
   let totalProtesting = 0;
 
   agents.forEach(a => {
-    // Salud influenciada por gasto sanitario público
-    const healthGain = (healthAlloc - 0.20) * 8;
+    // Salud influenciada por gasto sanitario público y fenómenos sociales activos
+    const healthGain = (healthAlloc - 0.20) * 8 + (traitEffects.healthBonusPerTick || 0);
     a.health = Math.max(10, Math.min(100, a.health + healthGain + (Math.random() - 0.5) * 2));
 
     // Satisfacción individual: función de su renta real, empleo, salud y ayudas
@@ -416,8 +430,9 @@ export function stepABMSimulation(abmState, params = {}) {
     // Inercia de satisfacción
     a.satisfaction = Math.round(a.satisfaction * 0.7 + targetSatisfaction * 0.3);
 
-    // ¿Sale a la calle a protestar?
-    a.isProtesting = a.satisfaction < 30;
+    // ¿Sale a la calle a protestar? Modulado por la mecha / sensibilidad de protesta
+    const protestThreshold = 30 * (traitEffects.protestSensitivityMultiplier || 1.0);
+    a.isProtesting = a.satisfaction < protestThreshold;
     if (a.isProtesting) totalProtesting++;
 
     // ─── FASE 5: DINÁMICA ESPACIAL 2D (Movimiento en Canvas) ──────────────────

@@ -5,7 +5,7 @@ import { UpgradesPanel } from './components/UpgradesPanel';
 import { MinistriesPanel } from './components/MinistriesPanel';
 import { EventsFeed } from './components/EventsFeed';
 import { SettingsPanel } from './components/SettingsPanel';
-import { TutorialModal } from './components/TutorialModal';
+import { WelcomeHubModal } from './components/WelcomeHubModal';
 import { ScaleVisualizerModal } from './components/ScaleVisualizerModal';
 import { ScenariosModal } from './components/ScenariosModal';
 import { GlobalAssemblyModal } from './components/GlobalAssemblyModal';
@@ -17,6 +17,11 @@ import { CommandPaletteModal } from './components/CommandPaletteModal';
 import { TechTreeModal } from './components/TechTreeModal';
 import { P2PRoomModal } from './components/P2PRoomModal';
 import { SimCityWorld } from './components/SimCityWorld';
+import { WorldViewport } from './components/WorldViewport';
+import { ModeNavBar } from './components/ModeNavBar';
+import { ToolsDropdown } from './components/ToolsDropdown';
+import { ScaleModeView } from './components/ScaleModeView';
+import { EnderFuturesView } from './components/EnderFuturesView';
 import { NationalGazette } from './components/NationalGazette';
 import { PostGameModal } from './components/PostGameModal';
 import { Milestones } from './components/Milestones';
@@ -26,7 +31,7 @@ import { DataCatalogModal } from './components/DataCatalogModal';
 import { ABMVisualizerModal } from './components/ABMVisualizerModal';
 import { NumberingSystems } from './utils/formatters';
 import { playWinSound, setAudioMuted, getAudioMuted } from './utils/audio';
-import { Play, Pause, FastForward, Skull, Trophy, Layers, Flag, Landmark, DollarSign, Cpu, RadioTower, Globe, Sliders, ShieldCheck, Mail, Printer, Command, Search, CalendarDays, Database, Users } from 'lucide-react';
+import { Play, Pause, FastForward, Skull, Trophy, Layers, Flag, Landmark, DollarSign, Cpu, RadioTower, Globe, Sliders, ShieldCheck, Mail, Printer, Command, Search, CalendarDays, Database, Users, HelpCircle } from 'lucide-react';
 
 function App() {
   const {
@@ -75,12 +80,14 @@ function App() {
   const [showYearPickerModal, setShowYearPickerModal] = useState(false);
   const [showDataCatalogModal, setShowDataCatalogModal] = useState(false);
   const [showABMModal, setShowABMModal] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(() => {
+  const [activeMode, setActiveMode] = useState('govern');
+  const [showWelcomeHub, setShowWelcomeHub] = useState(() => {
     return localStorage.getItem('bigNumbers_hideTutorial') !== 'true';
   });
 
-  const handleTutorialComplete = () => {
-    setShowTutorial(false);
+  const handleWelcomeComplete = (mode) => {
+    setShowWelcomeHub(false);
+    if (mode) setActiveMode(mode);
     setIsRunning(true);
   };
 
@@ -150,7 +157,11 @@ function App() {
   return (
     <div className={`app-container theme-${theme} ${screenShake ? 'screen-shake' : ''}`}>
       {/* MODALES */}
-      {showTutorial && <TutorialModal onComplete={handleTutorialComplete} />}
+      <WelcomeHubModal
+        isOpen={showWelcomeHub}
+        onClose={() => setShowWelcomeHub(false)}
+        onSelectMode={handleWelcomeComplete}
+      />
       <CommandPaletteModal
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
@@ -240,103 +251,51 @@ function App() {
       />
       <Milestones treasury={state.treasury} />
 
-      {/* CABECERA PRINCIPAL */}
+      {/* CABECERA PRINCIPAL REORGANIZADA */}
       <header className="app-header">
         <div className="title-area">
-          <h1 className="text-cyan">SIMULADOR DE MAGNITUDES</h1>
+          <h1 className="text-cyan">SIMULADOR DE GRANDES CIFRAS</h1>
           <p className="text-sm text-muted" style={{ letterSpacing: '1px', textTransform: 'uppercase' }}>
-            Centro de Mando Económico & Micro-Mundo Urbano
+            Del Sueldo al PIB • Presupuesto Real • 2.500 Agentes Vivos
           </p>
         </div>
 
         <div className="header-controls d-flex align-center gap-2 flex-wrap">
-          <button
-            className="btn btn-outline btn-sm d-flex align-center gap-1 command-palette-trigger"
-            onClick={() => setShowCommandPalette(true)}
-            title="Abrir Paleta de Comandos Rápidos (Ctrl+K)"
-          >
-            <Search size={14} className="text-cyan" />
-            <span className="hide-mobile">Buscar</span>
-            <span className="badge text-xs" style={{ background: 'rgba(255,255,255,0.08)' }}>Ctrl+K</span>
-          </button>
-
-          <button
-            className="btn btn-outline btn-sm d-flex align-center gap-1"
-            onClick={() => setShowPassportModal(true)}
-            title="Pasaporte Presidencial y Firma Criptográfica"
-          >
-            <ShieldCheck size={16} className="text-warning" />
-            <span className="hide-mobile">Pasaporte</span>
-          </button>
-
-          <button
-            className="btn btn-outline btn-sm d-flex align-center gap-1"
-            onClick={() => setShowRulesModal(true)}
-            title="Motor de Expansión por Reglas y Mods"
-          >
-            <Sliders size={16} className="text-cyan" />
-            <span className="hide-mobile">Reglas</span>
-            {activeModifiers.activeCount > 0 && (
-              <span className="badge badge-success text-xs">{activeModifiers.activeCount}</span>
-            )}
-          </button>
-
+          {/* SELECTOR RÁPIDO DE DATOS REALES DE ESPAÑA */}
           <button
             id="btn-real-data"
             className="btn btn-outline btn-sm d-flex align-center gap-1"
             onClick={() => setShowYearPickerModal(true)}
-            title="Cargar datos macroeconómicos reales de España por año"
-            style={state.realDataYear ? { borderColor: '#6366f1', color: '#a5b4fc' } : {}}
+            title="Cargar datos macroeconómicos reales de España por año (PGE)"
+            style={state.realDataYear ? { borderColor: '#6366f1', color: '#a5b4fc', background: 'rgba(99,102,241,0.1)' } : {}}
           >
             <CalendarDays size={15} style={{ color: state.realDataYear ? '#6366f1' : undefined }} />
-            <span className="hide-mobile">Datos Reales</span>
-            {state.realDataYear && (
-              <span className="badge" style={{ background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.65rem' }}>
-                🇪🇸 {state.realDataYear}
-              </span>
-            )}
+            <span>{state.realDataYear ? `🇪🇸 España: ${state.realDataYear}` : '🇪🇸 Datos Reales'}</span>
           </button>
 
-          <button
-            id="btn-data-catalog"
-            className="btn btn-outline btn-sm d-flex align-center gap-1"
-            onClick={() => setShowDataCatalogModal(true)}
-            title="Catálogo de datos: documentación viva de qué cifra viene de dónde"
-          >
-            <Database size={15} className="text-muted" />
-            <span className="hide-mobile">Catálogo</span>
-          </button>
-
-          <button
-            id="btn-abm-visualizer"
-            className="btn btn-outline btn-sm d-flex align-center gap-1"
-            onClick={() => setShowABMModal(true)}
-            title="Micro-Mundo ABM: Simulación Basada en 2.500 Agentes"
-            style={{ borderColor: 'rgba(56, 189, 248, 0.5)', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.08)' }}
-          >
-            <Users size={15} className="text-cyan" />
-            <span className="hide-mobile font-bold">Micro-Mundo ABM</span>
-            <span className="badge text-xs" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8' }}>2.5k</span>
-          </button>
-
+          {/* GUÍA INTERACTIVA DE INICIO */}
           <button
             className="btn btn-outline btn-sm d-flex align-center gap-1"
-            onClick={() => setShowAssemblyModal(true)}
-            title="Asamblea de Naciones: Dilema del Prisionero &amp; Efecto Ender"
+            onClick={() => setShowWelcomeHub(true)}
+            title="Abrir Centro de Bienvenida y Guía de Rutas"
           >
-            <Globe size={16} className="text-warning" />
-            <span className="hide-mobile">Asamblea</span>
+            <HelpCircle size={15} className="text-cyan" />
+            <span className="hide-mobile">Guía</span>
           </button>
 
-          <button
-            className="btn btn-outline btn-sm d-flex align-center gap-1"
-            onClick={() => setShowScaleModal(true)}
-            title="Explorar el Visor de Magnitudes & Potencias de 10"
-          >
-            <Layers size={16} className="text-warning" />
-            <span className="hide-mobile">Visor</span>
-          </button>
+          {/* MENÚ AGRUPADO DE HERRAMIENTAS Y LABORATORIO */}
+          <ToolsDropdown
+            onOpenDataCatalog={() => setShowDataCatalogModal(true)}
+            onOpenPassport={() => setShowPassportModal(true)}
+            onOpenRules={() => setShowRulesModal(true)}
+            onOpenDiplomacy={() => setShowDiplomacyModal(true)}
+            onOpenGazetteExport={() => setShowGazetteExportModal(true)}
+            onOpenP2PRoom={() => setShowP2PRoomModal(true)}
+            onOpenCommandPalette={() => setShowCommandPalette(true)}
+            activeModifiersCount={activeModifiers?.activeCount || 0}
+          />
 
+          {/* CONTROLES DE VELOCIDAD */}
           <div className="speed-controls d-flex align-center gap-1">
             <button
               className={`btn btn-sm ${timeSpeed === 1 ? 'btn-primary' : 'btn-outline'}`}
@@ -361,11 +320,12 @@ function App() {
             </button>
           </div>
 
+          {/* PAUSA / PLAY */}
           <button
             className={`btn ${isRunning ? 'btn-danger' : 'btn-success'}`}
             onClick={() => setIsRunning(!isRunning)}
             disabled={state.gameOver || state.gameWon || state.activeDilemma}
-            style={{ minWidth: '150px' }}
+            style={{ minWidth: '130px' }}
           >
             {isRunning ? (
               <><Pause size={18} /> Pausar</>
@@ -380,124 +340,151 @@ function App() {
         </div>
       </header>
 
-      {/* HUD DE MÉTRICAS */}
-      <HUD
-        state={state}
-        activeModifiers={activeModifiers}
-        numberingSystem={numberingSystem}
-        onOpenVisualizer={() => setShowScaleModal(true)}
-        onOpenScenarios={() => setShowScenariosModal(true)}
-        onOpenAssembly={() => setShowAssemblyModal(true)}
-        onOpenRules={() => setShowRulesModal(true)}
-        onOpenPassport={() => setShowPassportModal(true)}
-        onOpenDiplomacy={() => setShowDiplomacyModal(true)}
-        onOpenGazetteExport={() => setShowGazetteExportModal(true)}
-        onOpenABM={() => setShowABMModal(true)}
-      />
+      {/* BARRA DE NAVEGACIÓN EN 3 PASOS / MODOS */}
+      <ModeNavBar activeMode={activeMode} onSelectMode={setActiveMode} />
 
-      {/* PERIÓDICO SATÍRICO / GACETA NACIONAL */}
-      <NationalGazette state={state} />
+      {/* VISTA SEGÚN EL MODO ACTIVO */}
+      {activeMode === 'scale' && (
+        <ScaleModeView
+          currentTreasury={state.treasury}
+          numberingSystem={numberingSystem}
+          onGoToGovern={() => setActiveMode('govern')}
+        />
+      )}
 
-      {/* DIORAMA URBANO SIMCITY / GAME OF LIFE CON ARENA GENÉTICA */}
-      <SimCityWorld
-        state={state}
-        isRunning={isRunning}
-        timeSpeed={timeSpeed}
-        activeModifiers={activeModifiers}
-        numberingSystem={numberingSystem}
-      />
+      {activeMode === 'futures' && (
+        <EnderFuturesView
+          state={state}
+          applyAssemblyImpact={applyAssemblyImpact}
+          loadScenario={loadScenario}
+          numberingSystem={numberingSystem}
+          onGoToGovern={() => setActiveMode('govern')}
+        />
+      )}
 
-      {/* NAVEGACIÓN POR PESTAÑAS */}
-      <nav className="tab-navigation glass-panel mb-4 d-flex">
-        <button
-          className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'finances' ? 'active' : ''}`}
-          onClick={() => setActiveTab('finances')}
-        >
-          <DollarSign size={16} /> Finanzas & Histórico
-        </button>
-        <button
-          className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'ministries' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ministries')}
-        >
-          <Landmark size={16} /> Ministerios & Bonos
-        </button>
-        <button
-          className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'upgrades' ? 'active' : ''}`}
-          onClick={() => setActiveTab('upgrades')}
-        >
-          <Cpu size={16} /> Inversiones & Árbol Tecnológico
-        </button>
-        <button
-          className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'events' ? 'active' : ''}`}
-          onClick={() => setActiveTab('events')}
-        >
-          <RadioTower size={16} /> Crisis {state.activeDilemma ? '⚠️' : ''}
-        </button>
-      </nav>
+      {activeMode === 'govern' && (
+        <>
+          {/* HUD DE MÉTRICAS */}
+          <HUD
+            state={state}
+            activeModifiers={activeModifiers}
+            numberingSystem={numberingSystem}
+            onOpenVisualizer={() => setShowScaleModal(true)}
+            onOpenScenarios={() => setShowScenariosModal(true)}
+            onOpenAssembly={() => setShowAssemblyModal(true)}
+            onOpenRules={() => setShowRulesModal(true)}
+            onOpenPassport={() => setShowPassportModal(true)}
+            onOpenDiplomacy={() => setShowDiplomacyModal(true)}
+            onOpenGazetteExport={() => setShowGazetteExportModal(true)}
+            onOpenABM={() => setShowABMModal(true)}
+          />
 
-      {/* CONTENIDO PRINCIPAL */}
-      <main className="main-content">
-        <div className="tab-content-container">
-          {activeTab === 'finances' && (
-            <div className="tab-pane d-flex flex-column gap-4">
-              <StatsPanel
-                state={state}
-                currentIncome={currentIncome}
-                currentExpenses={currentExpenses}
-                debtInterest={debtInterest}
-                creditRating={creditRating}
-                setTaxRate={setTaxRate}
-                payDebt={payDebt}
-                numberingSystem={numberingSystem}
-              />
-              <SettingsPanel
-                numberingSystem={numberingSystem}
-                setNumberingSystem={setNumberingSystem}
-                onResetGame={resetGame}
-                onOpenScenarios={() => setShowScenariosModal(true)}
-                theme={theme}
-                setTheme={setTheme}
-              />
+          {/* PERIÓDICO SATÍRICO / GACETA NACIONAL */}
+          <NationalGazette state={state} />
+
+          {/* DIORAMA NACIONAL DUAL (VISTA MACRO CIUDAD + LUPA MICRO ABM 2.5K AGENTES) */}
+          <WorldViewport
+            state={state}
+            isRunning={isRunning}
+            timeSpeed={timeSpeed}
+            activeModifiers={activeModifiers}
+            numberingSystem={numberingSystem}
+            onOpenABMModal={() => setShowABMModal(true)}
+          />
+
+          {/* NAVEGACIÓN POR PESTAÑAS DE GESTIÓN */}
+          <nav className="tab-navigation glass-panel mb-4 d-flex">
+            <button
+              className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'finances' ? 'active' : ''}`}
+              onClick={() => setActiveTab('finances')}
+            >
+              <DollarSign size={16} /> Finanzas & Histórico
+            </button>
+            <button
+              className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'ministries' ? 'active' : ''}`}
+              onClick={() => setActiveTab('ministries')}
+            >
+              <Landmark size={16} /> Ministerios & Bonos
+            </button>
+            <button
+              className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'upgrades' ? 'active' : ''}`}
+              onClick={() => setActiveTab('upgrades')}
+            >
+              <Cpu size={16} /> Inversiones & Árbol Tecnológico
+            </button>
+            <button
+              className={`tab-btn flex-1 d-flex align-center justify-center gap-2 ${activeTab === 'events' ? 'active' : ''}`}
+              onClick={() => setActiveTab('events')}
+            >
+              <RadioTower size={16} /> Crisis {state.activeDilemma ? '⚠️' : ''}
+            </button>
+          </nav>
+
+          {/* CONTENIDO PRINCIPAL DE PESTAÑAS */}
+          <main className="main-content">
+            <div className="tab-content-container">
+              {activeTab === 'finances' && (
+                <div className="tab-pane d-flex flex-column gap-4">
+                  <StatsPanel
+                    state={state}
+                    currentIncome={currentIncome}
+                    currentExpenses={currentExpenses}
+                    debtInterest={debtInterest}
+                    creditRating={creditRating}
+                    setTaxRate={setTaxRate}
+                    payDebt={payDebt}
+                    numberingSystem={numberingSystem}
+                  />
+                  <SettingsPanel
+                    numberingSystem={numberingSystem}
+                    setNumberingSystem={setNumberingSystem}
+                    onResetGame={resetGame}
+                    onOpenScenarios={() => setShowScenariosModal(true)}
+                    theme={theme}
+                    setTheme={setTheme}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'ministries' && (
+                <div className="tab-pane">
+                  <MinistriesPanel
+                    state={state}
+                    creditRating={creditRating}
+                    setMinistryAllocations={setMinistryAllocations}
+                    issueBonds={issueBonds}
+                    payDebt={payDebt}
+                    depositSovereignFund={depositSovereignFund}
+                    withdrawSovereignFund={withdrawSovereignFund}
+                    numberingSystem={numberingSystem}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'upgrades' && (
+                <div className="tab-pane">
+                  <UpgradesPanel
+                    state={state}
+                    buyUpgrade={buyUpgrade}
+                    numberingSystem={numberingSystem}
+                    onOpenTechTree={() => setShowTechTreeModal(true)}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'events' && (
+                <div className="tab-pane">
+                  <EventsFeed
+                    state={state}
+                    resolveDilemma={resolveDilemma}
+                    numberingSystem={numberingSystem}
+                  />
+                </div>
+              )}
             </div>
-          )}
-
-          {activeTab === 'ministries' && (
-            <div className="tab-pane">
-              <MinistriesPanel
-                state={state}
-                creditRating={creditRating}
-                setMinistryAllocations={setMinistryAllocations}
-                issueBonds={issueBonds}
-                payDebt={payDebt}
-                depositSovereignFund={depositSovereignFund}
-                withdrawSovereignFund={withdrawSovereignFund}
-                numberingSystem={numberingSystem}
-              />
-            </div>
-          )}
-
-          {activeTab === 'upgrades' && (
-            <div className="tab-pane">
-              <UpgradesPanel
-                state={state}
-                buyUpgrade={buyUpgrade}
-                numberingSystem={numberingSystem}
-                onOpenTechTree={() => setShowTechTreeModal(true)}
-              />
-            </div>
-          )}
-
-          {activeTab === 'events' && (
-            <div className="tab-pane">
-              <EventsFeed
-                state={state}
-                resolveDilemma={resolveDilemma}
-                numberingSystem={numberingSystem}
-              />
-            </div>
-          )}
-        </div>
-      </main>
+          </main>
+        </>
+      )}
     </div>
   );
 }

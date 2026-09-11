@@ -12,6 +12,11 @@ import {
   stepABMSimulation,
   aggregateABMMacro
 } from '../utils/abmEngine';
+import {
+  loadSocialTraits,
+  saveSocialTraits,
+  calculateAggregateTraitEffects
+} from '../utils/socialTraitsEngine';
 
 export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed = 1, epaCalibration = null, abmCalibration = {}) {
   const [agentCount] = useState(2500);
@@ -20,6 +25,42 @@ export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed =
   epaRef.current = epaCalibration;
   const abmCalibRef = useRef(abmCalibration);
   abmCalibRef.current = abmCalibration;
+
+  // Rasgos y fenómenos sociales dinámicos
+  const [socialTraits, setSocialTraits] = useState(() => loadSocialTraits());
+  const traitEffects = useMemo(() => calculateAggregateTraitEffects(socialTraits), [socialTraits]);
+
+  const toggleSocialTrait = useCallback((id) => {
+    setSocialTraits(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, enabled: !t.enabled } : t);
+      saveSocialTraits(updated);
+      return updated;
+    });
+  }, []);
+
+  const updateSocialTraitIntensity = useCallback((id, intensity) => {
+    setSocialTraits(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, intensity: Math.max(0, Math.min(100, intensity)) } : t);
+      saveSocialTraits(updated);
+      return updated;
+    });
+  }, []);
+
+  const addCustomSocialTrait = useCallback((newTrait) => {
+    setSocialTraits(prev => {
+      const updated = [newTrait, ...prev];
+      saveSocialTraits(updated);
+      return updated;
+    });
+  }, []);
+
+  const deleteSocialTrait = useCallback((id) => {
+    setSocialTraits(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      saveSocialTraits(updated);
+      return updated;
+    });
+  }, []);
 
   const [abmState, setAbmState] = useState(() =>
     createABMPopulation(agentCount, gameState || {}, abmCalibration || {}, epaCalibration)
@@ -64,6 +105,7 @@ export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed =
       taxRate: gs.taxRate || 1.0,
       ministryAllocations: gs.ministryAllocations || { social: 40, health: 20, rd: 15, infra: 15, security: 10 },
       shock: shockToApply,
+      traitEffects
     });
 
     setAbmState({ agents: [...result.agents], firms: [...result.firms] });
@@ -74,7 +116,7 @@ export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed =
       // Los choques duran 1 o 2 ticks y luego se disipan
       setActiveShock(null);
     }
-  }, [activeShock]);
+  }, [activeShock, traitEffects]);
 
   // Bucle automático si está activo
   useEffect(() => {
@@ -100,23 +142,21 @@ export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed =
     const fresh = createABMPopulation(agentCount, gameStateRef.current || {}, abmCalibRef.current || {}, epa);
     setAbmState(fresh);
     setSelectedAgentId(null);
-    setActiveShock(null);
     setStepCount(1);
-    setLastStepStats(null);
   }, [agentCount]);
 
-  // Agregados macroeconómicos emergentes
+  // Estadísticas macroeconómicas agregadas desde la población individual
   const macroStats = useMemo(() => {
     return aggregateABMMacro(abmState.agents, gameState?.population || 47000000);
   }, [abmState.agents, gameState?.population]);
 
-  // Agente seleccionado para inspección
+  // Agente seleccionado actualmente para inspección de perfil
   const selectedAgent = useMemo(() => {
     if (!selectedAgentId) return null;
     return abmState.agents.find(a => a.id === selectedAgentId) || null;
-  }, [selectedAgentId, abmState.agents]);
+  }, [abmState.agents, selectedAgentId]);
 
-  // Hit-testing en canvas (buscar agente cerca de x, y)
+  // Buscar agente bajo las coordenadas del cursor
   const findAgentAt = useCallback((clickX, clickY, radius = 12) => {
     const agents = abmRef.current.agents;
     let closest = null;
@@ -151,5 +191,11 @@ export function useABMSimulation(gameState, globalIsRunning = false, timeSpeed =
     setSelectedAgentId,
     findAgentAt,
     resetPopulation,
+    socialTraits,
+    traitEffects,
+    toggleSocialTrait,
+    updateSocialTraitIntensity,
+    addCustomSocialTrait,
+    deleteSocialTrait
   };
 }
